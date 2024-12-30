@@ -1,31 +1,32 @@
-import math
+import random
+import time
 
-import numpy as np
 import pandas as pd
+
+from binning import binning_inplace
+from Index import Index
+
+pd.set_option('expand_frame_repr', False)
 
 data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train_converted.csv')
 # hmeq_train_df = hmeq_train_df.map(lambda item: np.nan if str(item).strip() == '.' else item)
 # hmeq_train_df.to_csv('data/hmeq/hmeq_train_converted.csv')
+# TODO 提前指定目标列？
+data_df.drop("BAD", axis=1, inplace=True)
+# TODO 自动确定分桶列
+binning_inplace(data_df, ["LOAN","MORTDUE","VALUE","YOJ","DEROG","DELINQ","CLAGE","NINQ","CLNO","DEBTINC"])
+# TODO 按distinct value数量决定排序顺序
+data_df.sort_values(["REASON","JOB","LOAN","MORTDUE","VALUE","YOJ","DEROG","DELINQ","CLAGE","NINQ","CLNO","DEBTINC"], inplace=True)
+# TODO 自动确定索引列
+index: Index = Index(data_df, ["LOAN","MORTDUE","VALUE","REASON","JOB","YOJ","DEROG","DELINQ","CLAGE","NINQ","CLNO","DEBTINC"])
 
-BIN_NUMBER = 20
+random.seed(time.time())
 
-# Binning
-for col_name in data_df.columns:
-    if data_df.dtypes[col_name].name == 'float64':
-        min_int: int = math.floor(data_df[col_name].min())
-        max_int: int = math.ceil(data_df[col_name].max())
-        step: float = (max_int - min_int) / BIN_NUMBER
-        if step < 1:
-            step = 1
-        bins: list[int] = []
-        cur_bin: float = min_int
-        while cur_bin <= max_int:
-            if math.ceil(cur_bin) >= max_int:
-                bins.append(max_int)
-            else:
-                bins.append(math.floor(cur_bin))
-            cur_bin += step
-        data_df[col_name] = pd.cut(data_df[col_name], bins=bins, include_lowest=True)
 
-print(data_df)
-
+selected = {}
+for i in range(1, 2381):
+    val = index.random_select_by_freq('JOB')
+    if val not in selected:
+        selected[val] = 0
+    selected[val]+=1
+print(selected)
