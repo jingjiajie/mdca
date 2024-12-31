@@ -3,8 +3,9 @@ import time
 
 import pandas as pd
 
+from MCTSTree import MCTSTreeNode
 from binning import binning_inplace
-from Index import Index
+from Index import Index, IndexLocationList, IndexLocation
 
 pd.set_option('expand_frame_repr', False)
 
@@ -23,10 +24,12 @@ index: Index = Index(data_df, ["LOAN","MORTDUE","VALUE","REASON","JOB","YOJ","DE
 random.seed(time.time())
 
 
-selected = {}
-for i in range(1, 2381):
-    val = index.random_select_by_freq('JOB')
-    if val not in selected:
-        selected[val] = 0
-    selected[val]+=1
-print(selected)
+node: MCTSTreeNode = MCTSTreeNode(MCTSTreeNode(None, index, None, None), index, "JOB", "Office")
+max_layer = node.simulate(100)
+print(max_layer)
+
+
+
+
+
+

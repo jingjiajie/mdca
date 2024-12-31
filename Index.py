@@ -14,13 +14,13 @@ class IndexLocation:
         return f"[{self.start}, {self.end}]"
 
 
-class IndexItem:
+class IndexLocationList:
 
     def __init__(self):
         self.locations: list[IndexLocation] = []  # Ascending ordered
         self.count = 0
 
-    def add_location(self, line_num: int):
+    def append_single_line(self, line_num: int):
         self.count += 1
         if len(self.locations) == 0:
             self.locations.append(IndexLocation(line_num, line_num))
@@ -31,42 +31,77 @@ class IndexItem:
         else:
             self.locations.append(IndexLocation(line_num, line_num))
 
+    def intersect(self, target: 'IndexLocationList') -> 'IndexLocationList':
+        new_list: IndexLocationList = IndexLocationList()
+        if len(self.locations) == 0 or len(target.locations) == 0:
+            return new_list
+        self_pos: int = 0
+        target_pos: int = 0
+        while True:
+            if self_pos == len(self.locations) or target_pos == len(target.locations):
+                break
+            self_loc: IndexLocation = self.locations[self_pos]
+            target_loc: IndexLocation = target.locations[target_pos]
+            if self_loc.end < target_loc.start:
+                self_pos += 1
+            elif target_loc.end < self_loc.start:
+                target_pos += 1
+            else:
+                max_start: int = self_loc.start
+                if target_loc.start > max_start:
+                    max_start = target_loc.start
+
+                min_end: int = self_loc.end
+                if target_loc.end < min_end:
+                    min_end = target_loc.end
+                new_list.locations.append(IndexLocation(max_start, min_end))
+
+                if min_end == self_loc.end:
+                    self_pos += 1
+                else:
+                    target_pos += 1
+
+        for loc in new_list.locations:
+            new_list.count += loc.end - loc.start
+        new_list.count += len(new_list.locations)
+        return new_list
+
 
 class Index:
 
     def __init__(self, data_df: pd.DataFrame, index_cols: list[str]):
         self._init_index(data_df, index_cols)
         self._init_select_vector()
-        self.columns: list[str] = data_df.columns
+        self.columns: list[str] = list(data_df.columns)
 
-    def _init_index(self, data_df: pd.DataFrame, index_cols: list[str]) -> dict[str, dict[str, IndexItem]]:
-        self._index: dict[str, dict[str, IndexItem]] = {}  # column -> value -> IndexItem
+    def _init_index(self, data_df: pd.DataFrame, index_cols: list[str]) -> dict[str, dict[str, IndexLocationList]]:
+        self._index: dict[str, dict[str, IndexLocationList]] = {}  # column -> value -> IndexLocationList
 
-        index: dict[str, dict[str, IndexItem]] = self._index
+        index: dict[str, dict[str, IndexLocationList]] = self._index
         for col in index_cols:
             index[col] = {}
             col_series: pd.Series = data_df[col]
             line_num = 0
             for item in col_series:
-                idx_item: IndexItem
+                loc_list: IndexLocationList
                 if item in index[col]:
-                    idx_item = index[col][item]
+                    loc_list = index[col][item]
                 else:
-                    index[col][item] = idx_item = IndexItem()
-                idx_item.add_location(line_num)
+                    index[col][item] = loc_list = IndexLocationList()
+                loc_list.append_single_line(line_num)
                 line_num += 1
         return index
 
     def _init_select_vector(self):
-        self._select_vector: dict[str, list[(str, int)]] = {}
+        self._select_vector: dict[str, list[(str, int)]] = {}  # column -> (value, cumulative_freq)
 
         for col in self._index.keys():
             val_count_map: dict[str, int] = {}
-            index_col: dict[str, IndexItem] = self._index[col]
+            index_col: dict[str, IndexLocationList] = self._index[col]
             for key in index_col:
                 val = key
-                item: IndexItem = index_col[key]
-                val_count_map[val] = item.count
+                loc_list: IndexLocationList = index_col[key]
+                val_count_map[val] = loc_list.count
 
             total = 0
             cumulate_list: list[(str, int)] = []
@@ -80,9 +115,19 @@ class Index:
     def get_columns_after(self, column: str):
         # TODO 二分查找
         pos = self.columns.index(column)
-        return self.columns[pos:]
+        if pos == len(self.columns) - 1:
+            return []
+        else:
+            return self.columns[pos+1:]
 
-    def random_select_by_freq(self, col: str):
+    def get_locations(self, column: str, value: str) -> IndexLocationList:
+        return self._index[column][value]
+
+    def random_select_value_by_freq(self, col: str) -> str:
+        """
+        :param col: column name
+        :return: selected value
+        """
         col_select_vec = self._select_vector[col]
         total = col_select_vec[len(col_select_vec)-1][1]
         rand = random.randint(0, total)
@@ -105,3 +150,4 @@ class Index:
                 return col_select_vec[mid][0]
         select_idx = high
         return col_select_vec[select_idx][0]
+
