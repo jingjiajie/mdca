@@ -1,4 +1,6 @@
 import random
+from typing import Iterable
+
 import pandas as pd
 
 
@@ -16,9 +18,14 @@ class IndexLocation:
 
 class IndexLocationList:
 
-    def __init__(self):
-        self.locations: list[IndexLocation] = []  # Ascending ordered
-        self.count = 0
+    def __init__(self, location: IndexLocation | None = None):
+        self.locations: list[IndexLocation] # Ascending ordered
+        if location is not None:
+            self.locations = [location]
+            self.count = location.end - location.start + 1
+        else:
+            self.locations = []
+            self.count = 0
 
     def append_single_line(self, line_num: int):
         self.count += 1
@@ -69,32 +76,49 @@ class IndexLocationList:
 
 class Index:
 
-    def __init__(self, data_df: pd.DataFrame, index_cols: list[str]):
-        self._init_index(data_df, index_cols)
+    def __init__(self, data_df: pd.DataFrame, index_cols: list[str], threshold: int):
+        self._index: dict[str, dict[str, IndexLocationList]]
+        self._select_vector: dict[str, list[(str, int)]]
+        self._init_index(data_df, index_cols, threshold)
         self._init_select_vector()
-        self.columns: list[str] = list(data_df.columns)
+        self.total_count = len(data_df)
+        filtered_columns: list[str] = []
+        col: str
+        for col in data_df.columns:
+            if col.startswith("Unnamed:"):
+                continue
+            else:
+                filtered_columns.append(col)
+        self.columns: list[str] = filtered_columns
 
-    def _init_index(self, data_df: pd.DataFrame, index_cols: list[str]) -> dict[str, dict[str, IndexLocationList]]:
-        self._index: dict[str, dict[str, IndexLocationList]] = {}  # column -> value -> IndexLocationList
-
-        index: dict[str, dict[str, IndexLocationList]] = self._index
+    def _init_index(self, data_df: pd.DataFrame, index_cols: list[str], threshold: int):
+        index: dict[str, dict[str, IndexLocationList]] = {}
         for col in index_cols:
             index[col] = {}
             col_series: pd.Series = data_df[col]
             line_num = 0
-            for item in col_series:
+            for val in col_series:
+                if type(val) is pd.Interval:
+                    val = str(val)
                 loc_list: IndexLocationList
-                if item in index[col]:
-                    loc_list = index[col][item]
+                if val in index[col]:
+                    loc_list = index[col][val]
                 else:
-                    index[col][item] = loc_list = IndexLocationList()
+                    index[col][val] = loc_list = IndexLocationList()
                 loc_list.append_single_line(line_num)
                 line_num += 1
-        return index
+        # remove items lower than threshold
+        filtered_index: dict[str, dict[str, IndexLocationList]] = {}
+        for col in index:
+            filtered_index[col] = {}
+            for val in index[col]:
+                loc_list: IndexLocationList = index[col][val]
+                if loc_list.count >= threshold:
+                    filtered_index[col][val] = loc_list
+        self._index = filtered_index
 
     def _init_select_vector(self):
-        self._select_vector: dict[str, list[(str, int)]] = {}  # column -> (value, cumulative_freq)
-
+        self._select_vector = {}  # column -> (value, cumulative_freq)
         for col in self._index.keys():
             val_count_map: dict[str, int] = {}
             index_col: dict[str, IndexLocationList] = self._index[col]
@@ -112,13 +136,27 @@ class Index:
                 cumulate_list.append((val, total))
             self._select_vector[col] = cumulate_list
 
-    def get_columns_after(self, column: str):
+    def get_columns_after(self, column: str | None):
+        if column is None:
+            return self.columns
         # TODO 二分查找
         pos = self.columns.index(column)
         if pos == len(self.columns) - 1:
             return []
         else:
             return self.columns[pos+1:]
+
+    def get_columns_before(self, column: str | None):
+        if column is None:
+            return None
+        pos = self.columns.index(column)
+        if pos == 0:
+            return []
+        else:
+            return self.columns[:pos]
+
+    def get_values_by_column(self, column: str) -> Iterable:
+        return self._index[column].keys()
 
     def get_locations(self, column: str, value: str) -> IndexLocationList:
         return self._index[column][value]
