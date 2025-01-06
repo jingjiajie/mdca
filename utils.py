@@ -1,23 +1,23 @@
 from typing import Any, Callable
 
 
-def bin_search_nearest_lower_int(search_list: list[int], value: int, low: int | None = None, high: int | None = None) -> int:
+def bin_search_nearest_lower_int(search_list_asc: list[int], value: int, low: int | None = None, high: int | None = None) -> int:
     """
     :param high: search end index
     :param low: search start index
-    :param search_list: list to search
+    :param search_list_asc: list to search
     :param value: value to search
     :return: -1 if value is the lowest, otherwise the index of nearest lower element
     """
-    if len(search_list) == 0:
+    if len(search_list_asc) == 0:
         return -1
     if low is None or low < 0:
         low = 0
-    if high is None or high >= len(search_list):
-        high = len(search_list) - 1
+    if high is None or high >= len(search_list_asc):
+        high = len(search_list_asc) - 1
     while low < high:
         mid: int = int((low + high) / 2)
-        cur: int = search_list[mid]
+        cur: int = search_list_asc[mid]
         if cur < value:
             if mid == low:
                 low += 1
@@ -30,7 +30,7 @@ def bin_search_nearest_lower_int(search_list: list[int], value: int, low: int | 
                 high = mid
         else:  # cur == rand
             return mid
-    if search_list[low] > value:
+    if search_list_asc[low] > value:
         low -= 1
     return low
 

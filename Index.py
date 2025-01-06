@@ -1,6 +1,7 @@
 import random
 from typing import Iterable
 
+import numpy as np
 import pandas as pd
 
 
@@ -87,6 +88,8 @@ class Index:
         for col in data_df.columns:
             if col.startswith("Unnamed:"):
                 continue
+            elif col not in self._index:  # Not reach threshold
+                continue
             else:
                 filtered_columns.append(col)
         self.columns: list[str] = filtered_columns
@@ -100,6 +103,8 @@ class Index:
             for val in col_series:
                 if type(val) is pd.Interval:
                     val = str(val)
+                elif type(val) is float and np.isnan(val):
+                    val = "nan"
                 loc_list: IndexLocationList
                 if val in index[col]:
                     loc_list = index[col][val]
@@ -110,10 +115,11 @@ class Index:
         # remove items lower than threshold
         filtered_index: dict[str, dict[str, IndexLocationList]] = {}
         for col in index:
-            filtered_index[col] = {}
             for val in index[col]:
                 loc_list: IndexLocationList = index[col][val]
                 if loc_list.count >= threshold:
+                    if col not in filtered_index:
+                        filtered_index[col] = {}
                     filtered_index[col][val] = loc_list
         self._index = filtered_index
 

@@ -1,8 +1,7 @@
-import math
 import random
 from typing import Iterable
 
-from Index import Index, IndexLocationList, IndexLocation
+from Index import IndexLocationList, IndexLocation
 from utils import bin_search_nearest_lower_int
 
 from typing import TYPE_CHECKING
@@ -10,10 +9,7 @@ if TYPE_CHECKING:
     from MCTSTree import MCTSTree
 
 # TODO 动态自适应
-SIMULATE_TIMES: int = 500
-
-UCB_C = 2  # TODO 寻找合适的值
-UCB_ALPHA = 0.001  # TODO 寻找合适的值
+SIMULATE_TIMES: int = 10
 
 
 class MCTSTreeNode:
@@ -74,24 +70,21 @@ class MCTSTreeNode:
                 skip_count: int = next_col_idx_pos - last_col_idx_pos
                 next_col_idx += skip_count
 
-    def _calculate_ucb(self) -> float:
-        if self.parent is None:  # No UCB for root node
-            return 0
-        return self.q_value + UCB_C * math.sqrt(math.log(self.parent.visit_count, math.e) / (self.visit_count + UCB_ALPHA))
-
     def select(self) -> 'MCTSTreeNode | None':
         self.visit_count += 1
         if self.children is None or len(self.children) == 0:
             return self
         # TODO 快速查找UCB最大的child
-        max_ucb_child: MCTSTreeNode = self.children[0]
-        max_ucb: float = self.children[0]._calculate_ucb()
+        search_list: list[int] = []
+        total: int = 0
         for c in self.children:
-            ucb: float = c._calculate_ucb()
-            if ucb > max_ucb:
-                max_ucb_child = c
-                max_ucb = ucb
-        return max_ucb_child.select()
+            total += c.q_value
+            search_list.append(c.q_value)
+        search_list.sort()
+        rand: int = random.randint(0, total)
+        idx: int = bin_search_nearest_lower_int(search_list, rand)
+        selected_child = self.children[idx]
+        return selected_child.select()
 
     def expand(self):
         children: list[MCTSTreeNode] = []
@@ -138,7 +131,10 @@ class MCTSTreeNode:
             cur = cur.parent
 
     def __str__(self):
-        return f"{self.column}={self.value}"
+        if self.is_root:
+            return "[MCTS Root]"
+        else:
+            return f"{self.column}={self.value}"
 
     def path(self):
         path = []
