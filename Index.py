@@ -103,8 +103,16 @@ class Index:
             for val in col_series:
                 if type(val) is pd.Interval:
                     val = str(val)
-                elif type(val) is float and np.isnan(val):
-                    val = "nan"
+                elif type(val) is float:
+                    if np.isnan(val):
+                        val = "nan"
+                    else:
+                        val = str(val)
+                        if "." in val:
+                            val = val.rstrip('0')
+                            if val.endswith("."):
+                                val = val[:-1]
+
                 loc_list: IndexLocationList
                 if val in index[col]:
                     loc_list = index[col][val]

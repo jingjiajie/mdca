@@ -144,7 +144,7 @@ class MCTSTreeNode:
                 path.append(str(node))
             node = node.parent
         path.reverse()
-        return "[" + ",".join(path) + "]"
+        return "[" + ", ".join(path) + "]"
 
     def pick(self):
         cur: MCTSTreeNode = self
