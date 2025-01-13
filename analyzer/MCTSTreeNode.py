@@ -1,15 +1,45 @@
 import random
 from typing import Iterable
 
-from Index import IndexLocationList, IndexLocation
-from utils import bin_search_nearest_lower_int
+from analyzer.Index import IndexLocationList, IndexLocation
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
 
-# TODO 动态自适应
-SIMULATE_TIMES: int = 10
+
+def _bin_search_nearest_lower_int(search_list_asc: list[int], value: int, low: int | None = None, high: int | None = None) -> int:
+    """
+    :param high: search end index
+    :param low: search start index
+    :param search_list_asc: list to search
+    :param value: value to search
+    :return: -1 if value is the lowest, otherwise the index of nearest lower element
+    """
+    if len(search_list_asc) == 0:
+        return -1
+    if low is None or low < 0:
+        low = 0
+    if high is None or high >= len(search_list_asc):
+        high = len(search_list_asc) - 1
+    while low < high:
+        mid: int = int((low + high) / 2)
+        cur: int = search_list_asc[mid]
+        if cur < value:
+            if mid == low:
+                low += 1
+            else:
+                low = mid
+        elif cur > value:
+            if mid == high:
+                high -= 1
+            else:
+                high = mid
+        else:  # cur == rand
+            return mid
+    if search_list_asc[low] > value:
+        low -= 1
+    return low
 
 
 class MCTSTreeNode:
@@ -62,7 +92,7 @@ class MCTSTreeNode:
         last_col_idx_pos: int
         while True:
             last_col_idx_pos = next_col_idx_pos
-            next_col_idx_pos: int = bin_search_nearest_lower_int(already_selected_col_idx, next_col_idx, last_col_idx_pos)
+            next_col_idx_pos: int = _bin_search_nearest_lower_int(already_selected_col_idx, next_col_idx, last_col_idx_pos)
             if next_col_idx_pos == last_col_idx_pos:
                 already_selected_col_idx.insert(next_col_idx_pos + 1, next_col_idx)
                 return columns[next_col_idx]
@@ -82,7 +112,7 @@ class MCTSTreeNode:
             search_list.append(c.q_value)
         search_list.sort()
         rand: int = random.randint(0, total)
-        idx: int = bin_search_nearest_lower_int(search_list, rand)
+        idx: int = _bin_search_nearest_lower_int(search_list, rand)
         selected_child = self.children[idx]
         return selected_child.select()
 
@@ -98,15 +128,16 @@ class MCTSTreeNode:
                     children.append(child)  # TODO 按UCB大小排序
         self.children = children
 
-    def simulate(self):
+    def simulate(self, simulate_times: int):
         """
         Update self.q_value as result
+        :param simulate_times: times of simulation
         :param threshold: influenced lines
         """
         self_depth: int = self.depth
         max_layer: int = self_depth
         columns_after = self.tree.data_index.get_columns_after(self.column)
-        for epoch in range(0, SIMULATE_TIMES):
+        for epoch in range(0, simulate_times):
             cur_locations: IndexLocationList = self.locations
             all_selected_col_idx: list[int] = []
             while len(all_selected_col_idx) < len(columns_after):

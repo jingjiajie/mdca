@@ -6,12 +6,10 @@ import pandas as pd
 
 
 class IndexLocation:
-    start: int
-    end: int
 
     def __init__(self, start: int, end: int):
-        self.start = start
-        self.end = end
+        self.start: int = start
+        self.end: int = end
 
     def __str__(self):
         return f"[{self.start}, {self.end}]"
@@ -20,7 +18,7 @@ class IndexLocation:
 class IndexLocationList:
 
     def __init__(self, location: IndexLocation | None = None):
-        self.locations: list[IndexLocation] # Ascending ordered
+        self.locations: list[IndexLocation]  # Ascending ordered
         if location is not None:
             self.locations = [location]
             self.count = location.end - location.start + 1
@@ -101,18 +99,6 @@ class Index:
             col_series: pd.Series = data_df[col]
             line_num = 0
             for val in col_series:
-                if type(val) is pd.Interval:
-                    val = str(val)
-                elif type(val) is float:
-                    if np.isnan(val):
-                        val = "nan"
-                    else:
-                        val = str(val)
-                        if "." in val:
-                            val = val.rstrip('0')
-                            if val.endswith("."):
-                                val = val[:-1]
-
                 loc_list: IndexLocationList
                 if val in index[col]:
                     loc_list = index[col][val]

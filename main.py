@@ -3,49 +3,27 @@ import time
 
 import pandas as pd
 
-from MCTSTree import MCTSTree
-from MCTSTreeNode import MCTSTreeNode
-from binning import binning_inplace
-from Index import Index, IndexLocationList, IndexLocation
-
-pd.set_option('expand_frame_repr', False)
-
-AFFECT_THRESHOLD = 100
-MCTS_ROUNDS = 10000
-
-data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train_converted.csv')
-# hmeq_train_df = hmeq_train_df.map(lambda item: np.nan if str(item).strip() == '.' else item)
-# hmeq_train_df.to_csv('data/hmeq/hmeq_train_converted.csv')
-# TODO 提前指定目标列？
-data_df.drop("BAD", axis=1, inplace=True)
-# TODO 自动确定分桶列
-binning_inplace(data_df, ["LOAN","MORTDUE","VALUE","YOJ","CLAGE","DEBTINC"])
-# TODO 按distinct value数量决定排序顺序
-data_df.sort_values(["REASON","JOB","LOAN","MORTDUE","VALUE","YOJ","DEROG","DELINQ","CLAGE","NINQ","CLNO","DEBTINC"], inplace=True)
-# TODO 自动确定索引列
-index: Index = Index(data_df, ["LOAN","MORTDUE","VALUE","REASON","JOB","YOJ","DEROG","DELINQ","CLAGE","NINQ","CLNO","DEBTINC"], AFFECT_THRESHOLD)
+from analyzer.MultiDimensionalAnalyzer import MultiDimensionalAnalyzer
+from analyzer.ResultPath import ResultPath
+from analyzer.Index import IndexLocationList
 
 random.seed(time.time())
 
-# [JOB=ProfExe,DEROG=[0.0, 1.0)] 418
-loc: IndexLocationList = (
-    # index._index["REASON"]['DebtCon']
-    # .intersect(index._index["JOB"]['Other'])
-    index._index["JOB"]['ProfExe']
-    .intersect(index._index["DEROG"]['0'])
-    # .intersect(index._index["NINQ"]['0'])
-       )
+# data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
+data_df: pd.DataFrame = pd.read_csv('data/flights/flights.csv')
 
+data_df.dropna(inplace=True, subset=['AIR_SYSTEM_DELAY'])
 
-print(loc.count)
-#
-# start = time.time()
-# tree: MCTSTree = MCTSTree(index, AFFECT_THRESHOLD)
-# result = tree.run(MCTS_ROUNDS)
-# item: MCTSTreeNode
-# end = time.time()
-# print("MCTS cost seconds: ", end-start)
-# for item in result:
-#     print(item.path(), item.influence_count)
-
-
+analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, "AIR_SYSTEM_DELAY")
+results: list[ResultPath] = analyzer.run()
+for r in results:
+    loc: IndexLocationList | None = None
+    for item in r.items:
+        if loc is None:
+            loc = analyzer._index.get_locations(item.column, item.value)
+        else:
+            loc = loc.intersect(analyzer._index.get_locations(item.column, item.value))
+    if loc is None:
+        print(r, 0)
+    else:
+        print(r, loc.count)
