@@ -14,7 +14,7 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process_inplace(self, data_df: pd.DataFrame, target_column: str | None) -> None:
+    def process_inplace(self, data_df: pd.DataFrame, target_column: str | None, is_sas_dataset: bool = False) -> None:
         data_df.reset_index(drop=True, inplace=True)
         if target_column is not None:
             data_df.drop(target_column, axis=1, inplace=True)
@@ -29,15 +29,25 @@ class DataPreprocessor:
         for i in range(0, len(column_types)):
             col_type: str = column_types[i]
             col_name: str = data_df.columns[i]
-            if col_type == 'float' and len(data_df[col_name].unique()) > BIN_NUMBER:
+            if (col_type == 'float' or col_type == 'int') and len(data_df[col_name].unique()) > BIN_NUMBER:
                 columns_for_binning.append(col_name)
+                column_types[i] = 'bin'
 
-        self._convert_df_values_inplace(data_df, data_df.columns, column_types)
+        if is_sas_dataset:
+            self._process_sas_missing_values_inplace(data_df, data_df.columns, column_types)
+        for col_pos in range(0, len(data_df.columns)):
+            col_name: str = data_df.columns[col_pos]
+            col_type: str = column_types[col_pos]
+            if col_type == 'float' or col_type == 'bin':
+                data_df[col_name].astype(float)
         self._binning_inplace(data_df, columns_for_binning)
         self._sort_by_unique_values_inplace(data_df)
         self._stringify_df_values_inplace(data_df)
+        pass
 
-    def _determine_column_type(self, data_df: pd.DataFrame, column: str, sampling_count: int = 2000) -> str:
+    def _determine_column_type(self, data_df: pd.DataFrame, column: str, sampling_count: int = 5000) -> str:
+        if 'int' in str(data_df[column].dtype):
+            return 'int'
         if len(data_df) < sampling_count:
             sampling_count = len(data_df)
         sample_rows = np.random.randint(0, len(data_df), sampling_count)
@@ -65,41 +75,26 @@ class DataPreprocessor:
                 guess_type = 'float'
         return guess_type
 
-    def _convert_df_values_inplace(self, data_df: pd.DataFrame, columns: list[str], types: list[str]):
-        for i in range(0, len(columns)):
-            col = columns[i]
-            col_type = types[i]
+    def _process_sas_missing_values_inplace(self, data_df: pd.DataFrame, columns: list[str], types: list[str]):
+        for col_pos in range(0, len(columns)):
+            col_name = columns[col_pos]
+            col_type = types[col_pos]
 
-            def _clean_value(val):
-                if col_type == 'float':
-                    if type(val) is str and val.strip() in ['', '.']:
+            if col_type == 'float' or col_type == 'bin':
+                def _clean_value(val):
+                    if type(val) is str:
+                        for c in val:
+                            if c != ' ' and c != '.':
+                                return val
                         return float('nan')
-                return val
-
-            data_df[col] = data_df[col].map(_clean_value)
-            if col_type == 'str':
-                data_df[col] = data_df[col].astype(str)
-            elif col_type == 'float':
-                data_df[col] = data_df[col].astype(float)
+                    else:
+                        return val
+                data_df[col_name] = data_df[col_name].map(_clean_value)
+                data_df[col_name] = data_df[col_name].astype(float)
 
     def _stringify_df_values_inplace(self, data_df: pd.DataFrame):
-        def _process_value(val) -> str:
-            if type(val) is float:
-                if np.isnan(val):
-                    val = "nan"
-                else:
-                    val = str(val)
-                    if "." in val:
-                        val = val.rstrip('0')
-                        if val.endswith("."):
-                            val = val[:-1]
-            else:
-                val = str(val)
-            return val
-
-        for col in data_df.columns:
-            data_df[col] = data_df[col].map(_process_value)
-            data_df[col].astype(str)
+        for c in data_df.columns:
+            data_df[c] = data_df[c].astype(str, copy=False, errors='raise')
 
     def _binning_inplace(self, data_df: pd.DataFrame, bin_cols: list[str]):
         for col_name in bin_cols:

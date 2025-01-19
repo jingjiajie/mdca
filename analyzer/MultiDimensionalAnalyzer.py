@@ -20,13 +20,13 @@ class MultiDimensionalAnalyzer:
         self._affect_threshold_count: int = int(len(data_df) * affect_threshold_ratio)
 
         preprocessor: DataPreprocessor = DataPreprocessor()
-        preprocessor.process_inplace(data_df, target_column)
+        preprocessor.process_inplace(data_df, target_column, is_sas_dataset=True)
         self._processed_data_df: pd.DataFrame = data_df
 
-        index: Index = Index(data_df, data_df.columns, self._affect_threshold_count)
+        index: Index = Index(data_df, self._affect_threshold_count)
         self._index = index
 
-    def run(self, mcts_rounds: int = 100) -> list[ResultPath]:
+    def run(self, mcts_rounds: int = 10000) -> list[ResultPath]:
         tree: MCTSTree = MCTSTree(self._index, self._affect_threshold_count)
         start_time: float = time.time()
         results: list[ResultPath] = tree.run(mcts_rounds)

@@ -1,9 +1,11 @@
 import random
 from typing import Iterable
 
-from analyzer.Index import IndexLocationList, IndexLocation
-
 from typing import TYPE_CHECKING
+
+import numpy as np
+import pandas as pd
+
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
 
@@ -52,29 +54,27 @@ class MCTSTreeNode:
         self.value: str | None = value
         self.visit_count = 0
         self.q_value: int = 0
-        self.locations: IndexLocationList
+        self.locations: np.ndarray | None
         self._init_location()
 
     @property
     def influence_count(self) -> int:
-        return self.locations.count
+        return self.locations.sum()
 
     @property
     def is_root(self) -> bool:
         return self.column is None and self.value is None
 
     def _init_location(self):
-        parent_loc: IndexLocationList
-        if self.parent is None:
-            parent_loc = IndexLocationList(IndexLocation(0, self.tree.data_index.total_count - 1))
+        if self.is_root:
+            self.locations = None
         else:
-            parent_loc = self.parent.locations
-
-        if self.column is not None and self.value is not None:
-            self_loc = self.tree.data_index.get_locations(self.column, self.value)
-            self.locations = parent_loc.intersect(self_loc)
-        else:
-            self.locations = parent_loc
+            self_loc: np.ndarray = self.tree.data_index.get_locations(self.column, self.value)
+            parent_loc: np.ndarray | None = self.parent.locations
+            if parent_loc is None:
+                self.locations = self_loc
+            else:
+                self.locations = parent_loc & self_loc
 
     @property
     def depth(self):
@@ -138,14 +138,14 @@ class MCTSTreeNode:
         max_layer: int = self_depth
         columns_after = self.tree.data_index.get_columns_after(self.column)
         for epoch in range(0, simulate_times):
-            cur_locations: IndexLocationList = self.locations
+            cur_locations: np.ndarray = self.locations
             all_selected_col_idx: list[int] = []
             while len(all_selected_col_idx) < len(columns_after):
                 next_col: str = self._select_next_column(columns_after, all_selected_col_idx)
                 selected_val = self.tree.data_index.random_select_value_by_freq(next_col)
-                locations: IndexLocationList = self.tree.data_index.get_locations(next_col, selected_val)
-                cur_locations = cur_locations.intersect(locations)
-                if cur_locations.count < self.tree.threshold:
+                locations: np.ndarray = self.tree.data_index.get_locations(next_col, selected_val)
+                cur_locations = cur_locations & locations
+                if cur_locations.sum() < self.tree.threshold:
                     depth: int = self_depth + len(all_selected_col_idx) - 1
                     if depth > max_layer:
                         max_layer = depth
@@ -201,8 +201,8 @@ class MCTSTreeNode:
             # TODO 频率从高到低
             values: Iterable = self.tree.data_index.get_values_by_column(col)
             for val in values:
-                val_loc: IndexLocationList = self.tree.data_index.get_locations(col, val)
-                intersect_loc: IndexLocationList = self.locations.intersect(val_loc)
-                if intersect_loc.count >= self.tree.threshold:
+                val_loc: np.ndarray = self.tree.data_index.get_locations(col, val)
+                intersect_loc: np.ndarray = self.locations & val_loc
+                if intersect_loc.sum() >= self.tree.threshold:
                     return False
         return True
