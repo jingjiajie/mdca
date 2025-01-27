@@ -1,5 +1,4 @@
 import math
-
 import numpy as np
 import pandas as pd
 
@@ -14,10 +13,12 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process_inplace(self, data_df: pd.DataFrame, target_column: str | None, is_sas_dataset: bool = False) -> None:
+    def process_inplace(self, data_df: pd.DataFrame, ignore_columns: list[str] | None = None,
+                        is_sas_dataset: bool = False) -> None:
+        if ignore_columns is not None:
+            data_df.drop(ignore_columns, axis=1, inplace=True)
+
         data_df.reset_index(drop=True, inplace=True)
-        if target_column is not None:
-            data_df.drop(target_column, axis=1, inplace=True)
 
         column_types: list[str] = []
         for col in data_df.columns:
@@ -82,7 +83,7 @@ class DataPreprocessor:
 
             if col_type == 'float' or col_type == 'bin':
                 def _clean_value(val):
-                    if type(val) is str:
+                    if type(val) is str or type(val) is np.str_:
                         for c in val:
                             if c != ' ' and c != '.':
                                 return val

@@ -24,6 +24,7 @@ from analyzer.ResultPath import ResultItem, ResultPath
 
 
 def chi2_filter(results: list[ResultPath], data_df: pd.DataFrame, index: Index) -> list[ResultPath]:
+    full_location: pd.Series = pd.Series(np.ones(len(data_df), dtype=np.bool))
     # Delete non-cause columns
     filtered_results = []
     for cur_result in results:
@@ -33,8 +34,8 @@ def chi2_filter(results: list[ResultPath], data_df: pd.DataFrame, index: Index) 
         while not no_items_deleted:
             no_items_deleted = True
             filtered_items: list[ResultItem] = []
-            remaining_loc: pd.Series = pd.Series(np.ones(len(data_df), dtype=np.bool))
             for cur_item in cur_result_items:
+                remaining_loc: pd.Series = full_location
                 item: ResultItem
                 for item in cur_result_items:
                     if item.column == cur_item.column:
@@ -48,7 +49,7 @@ def chi2_filter(results: list[ResultPath], data_df: pd.DataFrame, index: Index) 
                 chi2, p, dof, expected_freq = stats.chi2_contingency(observed)
                 expected_cur_item_freq_subset: np.float64 = expected_freq[0][0]
                 # print(cur_item, "\t","P: %.2f" % p,"SUBSET: ", value_count_subset, "\t/ TOTAL:", value_count_total)
-                if p <= 0.05 and cur_item_locations_subset.sum() > expected_cur_item_freq_subset:
+                if p <= 0.02 and cur_item_locations_subset.sum() > expected_cur_item_freq_subset:
                     filtered_items.append(cur_item)
                 else:  # item deleted
                     no_items_deleted = False

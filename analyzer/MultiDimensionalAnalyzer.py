@@ -16,11 +16,11 @@ SORT_UNIQUE_VALUES_THRESHOLD = 20
 
 class MultiDimensionalAnalyzer:
 
-    def __init__(self, data_df: pd.DataFrame, target_column: str | None, affect_threshold_ratio: float = 0.1):
+    def __init__(self, data_df: pd.DataFrame, ignore_columns: list[str] | None = None, affect_threshold_ratio: float = 0.1):
         self._affect_threshold_count: int = int(len(data_df) * affect_threshold_ratio)
 
         preprocessor: DataPreprocessor = DataPreprocessor()
-        preprocessor.process_inplace(data_df, target_column, is_sas_dataset=True)
+        preprocessor.process_inplace(data_df, ignore_columns, is_sas_dataset=True)
         self._processed_data_df: pd.DataFrame = data_df
 
         index: Index = Index(data_df, self._affect_threshold_count)
