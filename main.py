@@ -46,25 +46,24 @@ def mock_hmeq_data() -> pd.DataFrame:
 if __name__ == '__main__':
     random.seed(time.time())
 
-    data_df: pd.DataFrame = mock_hmeq_data()
+    # data_df: pd.DataFrame = mock_hmeq_data()
     # data_df.to_csv('data/hmeq/hmeq_train_mock.csv')
     # exit(0)
-    # data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
+    data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
     # data_df: pd.DataFrame = pd.read_csv('data/flights/flights.csv')
 
     # data_df.dropna(inplace=True, subset=['AIR_SYSTEM_DELAY'])
 
-    # data_df = data_df[data_df['BAD'] == 1].copy()
-
-    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, affect_threshold_ratio=0.05)
+    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
+                                                                  target_value='1', affect_threshold_ratio=0.03)
     results: list[ResultPath] = analyzer.run()
     for r in results:
         loc: np.ndarray | None = None
         for item in r.items:
             if loc is None:
-                loc = analyzer._index.get_locations(item.column, item.value)
+                loc = analyzer._full_index.get_locations(item.column, item.value)
             else:
-                loc = loc & analyzer._index.get_locations(item.column, item.value)
+                loc = loc & analyzer._full_index.get_locations(item.column, item.value)
         if loc is None:
             print(r, 0)
         else:

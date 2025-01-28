@@ -13,10 +13,7 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process_inplace(self, data_df: pd.DataFrame, ignore_columns: list[str] | None = None,
-                        is_sas_dataset: bool = False) -> None:
-        if ignore_columns is not None:
-            data_df.drop(ignore_columns, axis=1, inplace=True)
+    def process_inplace(self, data_df: pd.DataFrame, is_sas_dataset: bool = False) -> None:
 
         data_df.reset_index(drop=True, inplace=True)
 
