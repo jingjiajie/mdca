@@ -42,7 +42,7 @@ class MCTSTree:
             cur = cur.parent
         result_items.reverse()
         result_path: ResultPath = ResultPath(result_items)
-        if len(self._result) < 200:
+        if len(self._result) < 1000:
             self._result.append(result_path)
         elif result_path.depth > self._result[len(self._result) - 1].depth:
             self._result[len(self._result)-1] = result_path
