@@ -2,7 +2,7 @@ import math
 import numpy as np
 import pandas as pd
 
-BIN_NUMBER: int = 50
+BIN_NUMBER: int = 20
 MIN_BIN_STEP: int = 1
 
 SORT_UNIQUE_VALUES_THRESHOLD = 20

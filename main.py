@@ -89,7 +89,7 @@ if __name__ == '__main__':
 
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
     #                                                               target_value='1', is_sas_dataset=True,
-    #                                                               affect_threshold_ratio=0.05)
+    #                                                               min_error_coverage=0.2)
 
     # data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
     # data_df: pd.DataFrame = pd.read_csv('data/flights/flights_processed.csv')
@@ -100,7 +100,7 @@ if __name__ == '__main__':
 
     analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
                                                                   target_value='1', is_sas_dataset=False,
-                                                                  affect_threshold_ratio=0.02)
+                                                                  min_error_coverage=0.05)
 
     # results = [ResultPath(items=[ResultItem('isError', '1'), ResultItem('verificationStatus', '1')]),
     #            ResultPath(items=[ResultItem('isError', '1'), ResultItem('term', '5')]),
@@ -113,6 +113,7 @@ if __name__ == '__main__':
     # results = chi2_filter(results, analyzer.target_column, analyzer._full_index)
 
     results: list[ResultPath] = analyzer.run()
+    all_error_loc: pd.Series = analyzer._full_index.get_locations(analyzer.target_column, analyzer.target_value)
     for r in results:
         loc: np.ndarray | None = None
         for item in r.items:
@@ -121,9 +122,7 @@ if __name__ == '__main__':
                 loc = cur_loc
             else:
                 loc = loc & cur_loc
-        target_affect_count = (loc & analyzer._full_index.get_locations(analyzer.target_column, analyzer.target_value)).sum()
-        ratio_target: float = target_affect_count / len(analyzer._processed_target_df)
-        ratio_full: float = loc.sum() / len(analyzer._processed_full_data_df)
-        ratio_raise = ratio_target / ratio_full
-        if ratio_target >= 0.1 and ratio_raise >= 1.5:
-            print(r, "COUNT:%.2f" % target_affect_count, ", RATIO_FULL: %.4f" % ratio_full, ", RATIO_TARGET: %.4f" % ratio_target, 'RAISE: %.2f' % ratio_raise)
+        error_count = (loc & all_error_loc).sum()
+        error_rate: float = error_count / loc.sum()
+        error_coverage: float = error_count / all_error_loc.sum()
+        print(r, '\t', "error_count: %d" % error_count, ", error_coverage: %.2f" % error_coverage, ", error_rate: %.2f" % error_rate)

@@ -1,3 +1,4 @@
+import math
 import random
 from typing import Iterable
 
@@ -5,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+
+from analyzer.Index import Index
 
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
@@ -52,14 +55,39 @@ class MCTSTreeNode:
         self.children: list[MCTSTreeNode] | None = None  # TODO 改成跳表
         self.column: str | None = column
         self.value: str | None = value
-        self.visit_count = 0
         self.q_value: int = 0
         self.locations: np.ndarray | None
         self._init_location()
 
     @property
-    def influence_count(self) -> int:
-        return self.locations.sum()
+    def count(self) -> int:
+        if self.is_root:
+            return self.tree.data_index.total_count
+        else:
+            return self.locations.sum()
+
+    @property
+    def error_count(self) -> int:
+        index: Index = self.tree.data_index
+        err_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
+        if self.is_root:
+            return err_loc.sum()
+        else:
+            return (self.locations & err_loc).sum()
+
+    @property
+    def error_coverage(self) -> float:
+        index: Index = self.tree.data_index
+        err_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
+        return self.error_count / err_loc.sum()
+
+    @property
+    def error_rate(self) -> float:
+        return self.error_count / self.count
+
+    @property
+    def weight(self) -> float:
+        return self._calc_weight(self.error_coverage, self.error_rate)
 
     @property
     def is_root(self) -> bool:
@@ -101,19 +129,15 @@ class MCTSTreeNode:
                 next_col_idx += skip_count
 
     def select(self) -> 'MCTSTreeNode | None':
-        self.visit_count += 1
         if self.children is None or len(self.children) == 0:
             return self
-        # TODO 快速查找UCB最大的child
-        search_list: list[int] = []
-        total: int = 0
-        for c in self.children:
-            total += c.q_value
-            search_list.append(c.q_value)
-        search_list.sort()
-        rand: int = random.randint(0, total)
-        idx: int = _bin_search_nearest_lower_int(search_list, rand)
-        selected_child = self.children[idx]
+        # TODO 性能优化
+        children_weights: np.ndarray[np.float64] = np.ndarray(len(self.children), dtype=np.float64)
+        for i in range(len(self.children)):
+            child: MCTSTreeNode = self.children[i]
+            children_weights[i] = child.q_value
+        weights_normalized: np.ndarray[np.float64] = children_weights/children_weights.sum()
+        selected_child: MCTSTreeNode = np.random.choice(self.children, size=1, p=weights_normalized)[0]
         return selected_child.select()
 
     def expand(self):
@@ -123,36 +147,68 @@ class MCTSTreeNode:
             values: Iterable = self.tree.data_index.get_values_by_column(col)
             for val in values:
                 child = MCTSTreeNode(self.tree, self, col, val)  # TODO 不满足influence_count不要创建node
-                if child.influence_count >= self.tree.threshold:
+                if child.error_coverage >= self.tree.min_error_coverage:
                     # bin_search_nearest_lower(children, lambda c: c.)
-                    children.append(child)  # TODO 按UCB大小排序
+                    children.append(child)
         self.children = children
 
-    def simulate(self, simulate_times: int):
+    def _calc_weight(self, error_coverage: float, error_rate: float) -> float:
+        index: Index = self.tree.data_index
+        total_error_rate: float = index.total_error_rate
+        error_rate_dev: float
+        if error_rate < total_error_rate:
+            error_rate_dev = (total_error_rate - error_rate) / total_error_rate
+        else:
+            error_rate_dev = (error_rate - total_error_rate) / (1 - total_error_rate)
+        return (1 / -math.log(error_coverage)) * error_rate_dev**2
+
+    def simulate(self, simulate_times: int, max_simulate_depth: int = 10):
         """
         Update self.q_value as result
+        :param max_simulate_depth: max depth of one simulation
         :param simulate_times: times of simulation
-        :param threshold: influenced lines
         """
-        self_depth: int = self.depth
-        max_layer: int = self_depth
+        index: Index = self.tree.data_index
         columns_after = self.tree.data_index.get_columns_after(self.column)
+        err_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
+        max_weight: float = self._calc_weight(self.error_coverage, self.error_rate)
         for epoch in range(0, simulate_times):
-            cur_locations: np.ndarray = self.locations
+            cur_locations: pd.Series = self.locations
             all_selected_col_idx: list[int] = []
-            while len(all_selected_col_idx) < len(columns_after):
+            while len(all_selected_col_idx) < min(len(columns_after), max_simulate_depth):
                 next_col: str = self._select_next_column(columns_after, all_selected_col_idx)
-                selected_val = self.tree.data_index.random_select_value_by_freq(next_col)
-                locations: np.ndarray = self.tree.data_index.get_locations(next_col, selected_val)
-                cur_locations = cur_locations & locations
-                if cur_locations.sum() < self.tree.threshold:
-                    depth: int = self_depth + len(all_selected_col_idx) - 1
-                    if depth > max_layer:
-                        max_layer = depth
+                values: list[str] = list(index.get_values_by_column(next_col))
+                weights: np.ndarray[np.float64] = np.ndarray(shape=len(values), dtype=np.float64)
+                i: int = 0
+                for val in values:
+                    val: str
+                    new_loc: pd.Series = index.get_locations(next_col, val) & cur_locations
+                    new_loc_count: int = new_loc.sum()
+                    if new_loc_count == 0:
+                        weight = 0
+                    else:
+                        new_error_loc: pd.Series = new_loc & err_loc
+                        new_error_count: int = new_error_loc.sum()
+                        err_coverage: float = new_error_count / err_loc.sum()
+                        if err_coverage < self.tree.min_error_coverage:
+                            weights[i] = 0
+                            i += 1
+                            continue
+                        err_rate: float = new_error_count / new_loc_count
+                        weight: float = self._calc_weight(err_coverage, err_rate)
+                        if np.isnan(weight) or np.isnan(np.float64(weight)):
+                            pass
+                    weights[i] = weight
+                    if weight > max_weight:
+                        max_weight = weight
+                    i += 1
+                if np.all(weights == 0):
                     break
-            if len(all_selected_col_idx) == len(columns_after):
-                return len(columns_after)
-        self.q_value = max_layer
+                weights_normalized: np.ndarray[np.float64] = weights / weights.sum()
+                selected_val: str = np.random.choice(values, size=1, p=weights_normalized)[0]
+                selected_val_loc: pd.Series = index.get_locations(next_col, selected_val)
+                cur_locations = cur_locations & selected_val_loc
+        self.q_value = max_weight
 
     def back_propagate(self):
         cur: MCTSTreeNode = self.parent
@@ -179,30 +235,40 @@ class MCTSTreeNode:
 
     def pick(self):
         cur: MCTSTreeNode = self
-        while cur.parent is not None:
-            if len(cur.parent.children) > 1:
+        while True:
+            if len(cur.parent.children) > 1 or cur.parent.is_root:
                 cur.parent.children.remove(cur)  # TODO 性能
-                return
+                cur = cur.parent
+                break
             else:
                 cur = cur.parent
-        # Reached root node, almost impossible
-        cur.children = []
 
-    def check(self) -> bool:
-        included_cols: dict[str, bool] = {}
-        cur: MCTSTreeNode = self
-        while cur.parent is not None:
-            included_cols[cur.column] = True
+        while cur is not None:
+            if len(cur.children) == 0:
+                cur.q_value = cur.weight
+            else:
+                max_q_child: MCTSTreeNode = cur.children[0]
+                for child in cur.children:
+                    if child.q_value > max_q_child.q_value:
+                        max_q_child = child
+                cur.q_value = max_q_child.q_value
             cur = cur.parent
-        columns_before: list[str] = self.tree.data_index.get_columns_before(self.column)
-        for col in columns_before:
-            if col in included_cols:
-                continue
-            # TODO 频率从高到低
-            values: Iterable = self.tree.data_index.get_values_by_column(col)
-            for val in values:
-                val_loc: np.ndarray = self.tree.data_index.get_locations(col, val)
-                intersect_loc: np.ndarray = self.locations & val_loc
-                if intersect_loc.sum() >= self.tree.threshold:
-                    return False
-        return True
+
+    # def check(self) -> bool:
+    #     included_cols: dict[str, bool] = {}
+    #     cur: MCTSTreeNode = self
+    #     while cur.parent is not None:
+    #         included_cols[cur.column] = True
+    #         cur = cur.parent
+    #     columns_before: list[str] = self.tree.data_index.get_columns_before(self.column)
+    #     for col in columns_before:
+    #         if col in included_cols:
+    #             continue
+    #         # TODO 频率从高到低
+    #         values: Iterable = self.tree.data_index.get_values_by_column(col)
+    #         for val in values:
+    #             val_loc: np.ndarray = self.tree.data_index.get_locations(col, val)
+    #             intersect_loc: np.ndarray = self.locations & val_loc
+    #             if intersect_loc.sum() >= self.tree.threshold:
+    #                 return False
+    #     return True

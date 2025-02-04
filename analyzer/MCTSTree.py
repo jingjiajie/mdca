@@ -8,14 +8,13 @@ SIMULATE_TIMES: int = 10
 
 class MCTSTree:
 
-    def __init__(self, data_index: Index, threshold: int):
+    def __init__(self, data_index: Index, min_error_coverage: float):
         self.data_index: Index = data_index
-        self.threshold: int = threshold
+        self.min_error_coverage: float = min_error_coverage
         self._root: MCTSTreeNode = MCTSTreeNode(self, None, None, None)
         self._result: list[ResultPath] = []  # descending ordered
 
     def run(self, times: int):
-        self._result = []
         for i in range(0, times):
             selected_leaf: MCTSTreeNode = self._root.select()
             if selected_leaf.children is None:
@@ -27,24 +26,30 @@ class MCTSTree:
                     child.back_propagate()
             elif selected_leaf.is_root:
                 break
-            else:  # len(selected_leaf.children) == 0 and not selected_leaf.is_root
-                selected_leaf.pick()
-                if selected_leaf.check():
-                    self._add_result(selected_leaf)
+        results: list[ResultPath] = self._choose_results()
+        return results
 
-        return self._result
-
-    def _add_result(self, node: MCTSTreeNode):
-        result_items: list[ResultItem] = []
-        cur: MCTSTreeNode = node
-        while cur.parent is not None:
-            result_items.append(ResultItem(cur.column, cur.value))
-            cur = cur.parent
-        result_items.reverse()
-        result_path: ResultPath = ResultPath(result_items)
-        if len(self._result) < 1000:
-            self._result.append(result_path)
-        elif result_path.depth > self._result[len(self._result) - 1].depth:
-            self._result[len(self._result)-1] = result_path
-        self._result.sort(key=lambda item: item.depth, reverse=True)
-
+    def _choose_results(self, max_results: int = 20) -> list[ResultPath]:
+        results: list[ResultPath] = []
+        for i in range(0, max_results):
+            cur: MCTSTreeNode = self._root
+            while cur.children is not None and len(cur.children) > 0:
+                max_q_child: MCTSTreeNode = cur.children[0]
+                for child in cur.children:
+                    if child.q_value > max_q_child.q_value:
+                        max_q_child = child
+                if max_q_child.q_value < cur.q_value:
+                    break
+                else:
+                    cur = max_q_child
+            if cur.is_root:
+                break
+            cur.pick()
+            result_items: list[ResultItem] = []
+            while cur.parent is not None:
+                result_items.append(ResultItem(cur.column, cur.value))
+                cur = cur.parent
+            result_items.reverse()
+            result_path: ResultPath = ResultPath(result_items)
+            results.append(result_path)
+        return results
