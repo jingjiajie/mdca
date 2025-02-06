@@ -147,7 +147,8 @@ class MCTSTreeNode:
             values: Iterable = self.tree.data_index.get_values_by_column(col)
             for val in values:
                 child = MCTSTreeNode(self.tree, self, col, val)  # TODO 不满足influence_count不要创建node
-                if child.error_coverage >= self.tree.min_error_coverage:
+                if (child.error_coverage >= self.tree.min_error_coverage and
+                        child.error_rate >= self.tree.data_index.total_error_rate):
                     # bin_search_nearest_lower(children, lambda c: c.)
                     children.append(child)
         self.children = children
@@ -155,12 +156,7 @@ class MCTSTreeNode:
     def _calc_weight(self, error_coverage: float, error_rate: float) -> float:
         index: Index = self.tree.data_index
         total_error_rate: float = index.total_error_rate
-        error_rate_dev: float
-        if error_rate < total_error_rate:
-            error_rate_dev = (total_error_rate - error_rate) / total_error_rate
-        else:
-            error_rate_dev = (error_rate - total_error_rate) / (1 - total_error_rate)
-        return (1 / -math.log(error_coverage)) * error_rate_dev**2
+        return error_coverage * (2 * abs(error_rate - total_error_rate))**3
 
     def simulate(self, simulate_times: int, max_simulate_depth: int = 10):
         """
