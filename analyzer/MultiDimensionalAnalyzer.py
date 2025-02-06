@@ -1,12 +1,14 @@
 import time
 
+import numpy as np
 import pandas as pd
 
 from analyzer.Index import Index
 from analyzer.MCTSTree import MCTSTree
 from analyzer.ResultPath import ResultPath, ResultItem
-from analyzer.DataPreprocessor import DataPreprocessor
+from analyzer.DataPreprocessor import DataPreprocessor, ProcessResult
 from analyzer.chi2_filter import chi2_filter
+from analyzer.types import Value
 
 BIN_NUMBER: int = 50
 MIN_BIN: int = 1
@@ -16,29 +18,26 @@ SORT_UNIQUE_VALUES_THRESHOLD = 20
 
 class MultiDimensionalAnalyzer:
 
-    def __init__(self, data_df: pd.DataFrame, target_column: str, target_value: str,
+    def __init__(self, data_df: pd.DataFrame, target_column: str, target_value: Value,
                  min_error_coverage: float = 0.05, is_sas_dataset: bool = False):
+
+        if isinstance(target_value, float) and np.isnan(target_value):
+            target_value = np.nan
+
         self.target_column: str = target_column
-        self.target_value: str = target_value
+        self.target_value: Value = target_value
         self.min_error_coverage: float = min_error_coverage
-        # TODO 先筛选后处理
+
         preprocessor: DataPreprocessor = DataPreprocessor()
-        data_df = preprocessor.process(data_df, is_sas_dataset=is_sas_dataset)
-        self._processed_full_data_df: pd.DataFrame = data_df
+        process_result: ProcessResult = preprocessor.process(data_df, is_sas_dataset=is_sas_dataset)
+        self._processed_data_df: pd.DataFrame = process_result.data_df
 
-        # target_df: pd.DataFrame = data_df[data_df[target_column] == target_value].copy()
-        # target_df.drop(target_column, axis=1, inplace=True)
-        # target_df.reset_index(drop=True, inplace=True)
-        # self._processed_target_df: pd.DataFrame = target_df
-
-        # target_df_index: Index = Index(self._processed_target_df, self._affect_threshold_count)
-        # self._target_index = target_df_index
-
-        full_index: Index = Index(self._processed_full_data_df, target_column, target_value, self.min_error_coverage)
-        self._full_index = full_index
+        data_index: Index = Index(self._processed_data_df, process_result.column_types, target_column,
+                                  target_value, self.min_error_coverage)
+        self._data_index = data_index
 
     def run(self, mcts_rounds: int = 10000) -> list[ResultPath]:
-        tree: MCTSTree = MCTSTree(self._full_index, self.min_error_coverage)
+        tree: MCTSTree = MCTSTree(self._data_index, self.min_error_coverage)
         start_time: float = time.time()
         results: list[ResultPath] = tree.run(mcts_rounds)
         print("MCTS cost: %.2f seconds" % (time.time() - start_time))

@@ -4,11 +4,12 @@ from scipy import stats
 
 from analyzer.Index import  Index
 from analyzer.ResultPath import ResultItem, ResultPath
+from analyzer.types import Value
 
 CHI2_THRESHOLD: float = 0.01
 
 
-def chi2_filter(results: list[ResultPath], target_column: str, target_value: str, index: Index) -> list[ResultPath]:
+def chi2_filter(results: list[ResultPath], target_column: str, target_value: Value, index: Index) -> list[ResultPath]:
     full_location: pd.Series = pd.Series(np.ones(index.total_count, dtype=np.bool))
     target_item: ResultItem = ResultItem(target_column, target_value)
 

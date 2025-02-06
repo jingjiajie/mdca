@@ -85,22 +85,22 @@ def mock_hmeq_data() -> pd.DataFrame:
 if __name__ == '__main__':
     random.seed(time.time())
 
-    # data_df: pd.DataFrame = mock_hmeq_data()
+    data_df: pd.DataFrame = mock_hmeq_data()
 
-    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
-    #                                                               target_value='1', is_sas_dataset=True,
-    #                                                               min_error_coverage=0.2)
+    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
+                                                                  target_value=1, is_sas_dataset=True,
+                                                                  min_error_coverage=0.2)
 
     # data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
     # data_df: pd.DataFrame = pd.read_csv('data/flights/flights_processed.csv')
 
     # data_df.dropna(inplace=True, subset=['AIR_SYSTEM_DELAY'])
 
-    data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
-
-    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
-                                                                  target_value='1', is_sas_dataset=False,
-                                                                  min_error_coverage=0.05)
+    # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
+    #
+    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
+    #                                                               target_value=1, is_sas_dataset=False,
+    #                                                               min_error_coverage=0.05)
 
     # results = [ResultPath(items=[ResultItem('isError', '1'), ResultItem('verificationStatus', '1')]),
     #            ResultPath(items=[ResultItem('isError', '1'), ResultItem('term', '5')]),
@@ -113,11 +113,11 @@ if __name__ == '__main__':
     # results = chi2_filter(results, analyzer.target_column, analyzer._full_index)
 
     results: list[ResultPath] = analyzer.run()
-    all_error_loc: pd.Series = analyzer._full_index.get_locations(analyzer.target_column, analyzer.target_value)
+    all_error_loc: pd.Series = analyzer._data_index.get_locations(analyzer.target_column, analyzer.target_value)
     for r in results:
         loc: np.ndarray | None = None
         for item in r.items:
-            cur_loc: np.ndarray = analyzer._full_index.get_locations(item.column, item.value)
+            cur_loc: np.ndarray = analyzer._data_index.get_locations(item.column, item.value)
             if loc is None:
                 loc = cur_loc
             else:

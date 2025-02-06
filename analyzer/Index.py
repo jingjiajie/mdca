@@ -4,14 +4,17 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
+from analyzer.types import Value
+
 
 class Index:
 
-    def __init__(self, data_df: pd.DataFrame, target_column: str, target_value: str, min_error_coverage: float):
+    def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value,
+                 min_error_coverage: float):
         self._index: dict[str, dict[str, pd.Series]]
-        self._init_index(data_df, target_column, target_value, min_error_coverage)
+        self._init_index(data_df, column_types, target_column, target_value, min_error_coverage)
         self.target_column: str = target_column
-        self.target_value: str = target_value
+        self.target_value: Value = target_value
         self.total_count = len(data_df)
         self.total_error_rate = self.get_locations(target_column, target_value).sum() / self.total_count
         filtered_columns: list[str] = []
@@ -27,33 +30,40 @@ class Index:
                 filtered_columns.append(col)
         self.non_target_columns: list[str] = filtered_columns
 
-    def _init_index(self, data_df: pd.DataFrame, target_column: str, target_value: str, min_error_coverage: float):
+    def _init_index(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value, min_error_coverage: float):
         col_names: list[str] = data_df.columns
-        col_count: int = len(col_names)
-        col_indexes: list[dict[str, np.ndarray]] = [{} for _ in range(0, col_count)]
+        col_indexes: dict[str, dict[Value, np.ndarray]] = {}
         target_col_val_index: np.ndarray | None = None
-        for col_pos in range(0, col_count):
-            col_name: str = col_names[col_pos]
+        for col_name in col_names:
+            is_float_col: bool = column_types[col_name] == 'float'
+            col_indexes[col_name] = {}
             for val in data_df[col_name].unique():
-                col_indexes[col_pos][val] = np.zeros(len(data_df), dtype=np.bool)
-                if col_name == target_column and val == target_value:
-                    target_col_val_index = col_indexes[col_pos][val]
+                # todo 检查issubclass()的性能！
+                if is_float_col and issubclass(type(val), float) and np.isnan(val):
+                    val = np.nan
+                col_indexes[col_name][val] = np.zeros(len(data_df), dtype=np.bool)
+                if col_name == target_column and (val == target_value or val is target_value):  # np.nan is np.nan
+                    target_col_val_index = col_indexes[col_name][val]
 
-        df_values = data_df.values
-        for row_num in range(0, len(df_values)):
-            row = df_values[row_num]
-            for col_pos in range(0, col_count):
-                val: str = row[col_pos]
-                col_indexes[col_pos][val][row_num] = True
+        for col_name in col_names:
+            series_array: np.ndarray = data_df[col_name].values
+            is_float_col: bool = column_types[col_name] == 'float'
+            col_index = col_indexes[col_name]
+            for row_num in range(0, len(series_array)):
+                val: Value = series_array[row_num]
+                # todo 检查issubclass()的性能！
+                if is_float_col and issubclass(type(val), float) and np.isnan(val):
+                    val = np.nan
+                col_index[val][row_num] = True
 
         error_count: int = target_col_val_index.sum()
         index: dict[str, dict[str, pd.Series]] = {}
-        for col_pos in range(0, col_count):
-            for val in col_indexes[col_pos].keys():
-                val: str
-                val_index: np.ndarray = col_indexes[col_pos][val]
-                col_name: str = col_names[col_pos]
-                if col_name != target_column and (val_index & target_col_val_index).sum() / error_count < min_error_coverage:
+        for col_name in col_names:
+            for val in col_indexes[col_name].keys():
+                val: Value
+                val_index: np.ndarray = col_indexes[col_name][val]
+                if (col_name != target_column and
+                        (val_index & target_col_val_index).sum() / error_count < min_error_coverage):
                     continue
                 if col_name not in index:
                     index[col_name] = {}
