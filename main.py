@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 
 from analyzer.MultiDimensionalAnalyzer import MultiDimensionalAnalyzer
-from analyzer.ResultPath import ResultPath, ResultItem
-from analyzer.chi2_filter import chi2_filter
+from analyzer.ResultPath import ResultPath
 
 
 def mock_hmeq_data() -> pd.DataFrame:
@@ -85,22 +84,24 @@ def mock_hmeq_data() -> pd.DataFrame:
 if __name__ == '__main__':
     random.seed(time.time())
 
-    data_df: pd.DataFrame = mock_hmeq_data()
-
-    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
-                                                                  target_value=1, is_sas_dataset=True,
-                                                                  min_error_coverage=0.2)
+    # data_df: pd.DataFrame = mock_hmeq_data()
+    #
+    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
+    #                                                               target_value=1, is_sas_dataset=True,
+    #                                                               min_error_coverage=0.2)
 
     # data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
     # data_df: pd.DataFrame = pd.read_csv('data/flights/flights_processed.csv')
 
     # data_df.dropna(inplace=True, subset=['AIR_SYSTEM_DELAY'])
 
-    # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
-    #
-    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
-    #                                                               target_value=1, is_sas_dataset=False,
-    #                                                               min_error_coverage=0.05)
+    data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
+
+    # data_df = data_df[data_df['term'] != 6]
+
+    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
+                                                                  target_value=1, is_sas_dataset=False,
+                                                                  min_error_coverage=0.02)
 
     # results = [ResultPath(items=[ResultItem('isError', '1'), ResultItem('verificationStatus', '1')]),
     #            ResultPath(items=[ResultItem('isError', '1'), ResultItem('term', '5')]),
@@ -113,16 +114,15 @@ if __name__ == '__main__':
     # results = chi2_filter(results, analyzer.target_column, analyzer._full_index)
 
     results: list[ResultPath] = analyzer.run()
-    all_error_loc: pd.Series = analyzer._data_index.get_locations(analyzer.target_column, analyzer.target_value)
+    total_error_loc: pd.Series = analyzer.data_index.get_locations(analyzer.target_column, analyzer.target_value)
+    total_error_count = total_error_loc.sum()
+    total_error_rate: float = analyzer.data_index.total_error_rate
+    total_count: int = analyzer.data_index.total_count
     for r in results:
-        loc: np.ndarray | None = None
-        for item in r.items:
-            cur_loc: np.ndarray = analyzer._data_index.get_locations(item.column, item.value)
-            if loc is None:
-                loc = cur_loc
-            else:
-                loc = loc & cur_loc
-        error_count = (loc & all_error_loc).sum()
-        error_rate: float = error_count / loc.sum()
-        error_coverage: float = error_count / all_error_loc.sum()
-        print(r, '\t', "error_count: %d" % error_count, ", error_coverage: %.2f" % error_coverage, ", error_rate: %.2f" % error_rate)
+        calculated = r.calculate(analyzer.data_index)
+        error_count = calculated.error_count
+        error_rate: float = calculated.error_rate
+        error_coverage: float = calculated.error_coverage
+        print(r, '\t', "error_count: %d" % error_count, ", error_coverage: %d%%" % (100 * error_coverage),
+              ", error_rate: %.2f(+%d%%)" % (error_rate, 100*(error_rate - analyzer.data_index.total_error_rate)),
+              ", weight: %.2f" % calculated.weight)

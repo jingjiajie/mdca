@@ -16,6 +16,7 @@ class MCTSTree:
 
     def run(self, times: int):
         for i in range(0, times):
+            # TODO 全部遍历完成提前停止！
             selected_leaf: MCTSTreeNode = self._root.select()
             if selected_leaf.children is None:
                 selected_leaf.expand()
@@ -29,7 +30,7 @@ class MCTSTree:
         results: list[ResultPath] = self._choose_results()
         return results
 
-    def _choose_results(self, max_results: int = 20) -> list[ResultPath]:
+    def _choose_results(self, max_results: int = 1000) -> list[ResultPath]:
         results: list[ResultPath] = []
         for i in range(0, max_results):
             cur: MCTSTreeNode = self._root
@@ -47,7 +48,7 @@ class MCTSTree:
             cur.pick()
             result_items: list[ResultItem] = []
             while cur.parent is not None:
-                result_items.append(ResultItem(cur.column, cur.value))
+                result_items.append(ResultItem(cur.column, cur.value, self.data_index.get_locations(cur.column, cur.value)))
                 cur = cur.parent
             result_items.reverse()
             result_path: ResultPath = ResultPath(result_items)

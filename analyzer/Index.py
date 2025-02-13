@@ -1,18 +1,16 @@
-import random
 from typing import Iterable
 
 import numpy as np
 import pandas as pd
 
-from analyzer.types import Value
+from analyzer.commons import Value
 
 
 class Index:
 
-    def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value,
-                 min_error_coverage: float):
+    def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value):
         self._index: dict[str, dict[str, pd.Series]]
-        self._init_index(data_df, column_types, target_column, target_value, min_error_coverage)
+        self._init_index(data_df, column_types, target_column, target_value)
         self.target_column: str = target_column
         self.target_value: Value = target_value
         self.total_count = len(data_df)
@@ -30,7 +28,7 @@ class Index:
                 filtered_columns.append(col)
         self.non_target_columns: list[str] = filtered_columns
 
-    def _init_index(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value, min_error_coverage: float):
+    def _init_index(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value):
         col_names: list[str] = data_df.columns
         col_indexes: dict[str, dict[Value, np.ndarray]] = {}
         target_col_val_index: np.ndarray | None = None
@@ -56,15 +54,11 @@ class Index:
                     val = np.nan
                 col_index[val][row_num] = True
 
-        error_count: int = target_col_val_index.sum()
         index: dict[str, dict[str, pd.Series]] = {}
         for col_name in col_names:
             for val in col_indexes[col_name].keys():
                 val: Value
                 val_index: np.ndarray = col_indexes[col_name][val]
-                if (col_name != target_column and
-                        (val_index & target_col_val_index).sum() / error_count < min_error_coverage):
-                    continue
                 if col_name not in index:
                     index[col_name] = {}
                 index[col_name][val] = pd.Series(val_index)
@@ -80,9 +74,9 @@ class Index:
         else:
             return self.non_target_columns[pos + 1:]
 
-    def get_values_by_column(self, column: str) -> Iterable:
+    def get_values_by_column(self, column: str) -> Iterable[Value | pd.Interval]:
         return self._index[column].keys()
 
-    def get_locations(self, column: str, value: str) -> pd.Series:
+    def get_locations(self, column: str, value: Value | pd.Interval) -> pd.Series:
         return self._index[column][value]
 

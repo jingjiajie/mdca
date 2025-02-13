@@ -2,10 +2,13 @@ import math
 import numpy as np
 import pandas as pd
 
+from analyzer.commons import Value
+
 BIN_NUMBER: int = 20
 MIN_BIN_STEP: int = 1
 
 SORT_UNIQUE_VALUES_THRESHOLD = 20
+
 
 class ProcessResult:
 
@@ -20,7 +23,8 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process(self, data_df: pd.DataFrame, is_sas_dataset: bool = False) -> ProcessResult:
+    def process(self, data_df: pd.DataFrame, target_column: str, target_value: Value,
+                is_sas_dataset: bool = False) -> ProcessResult:
 
         self._drop_single_value_column(data_df)
         data_df.reset_index(drop=True, inplace=True)
@@ -33,7 +37,8 @@ class DataPreprocessor:
         column_bin_mode: dict[str, bool] = {}
         for col_name in data_df.columns:
             col_type: str = column_types[col_name]
-            if (col_type == 'float' or col_type == 'int') and len(data_df[col_name].unique()) > BIN_NUMBER:
+            if (col_name != target_column and (col_type == 'float' or col_type == 'int')
+                    and len(data_df[col_name].unique()) > BIN_NUMBER):
                 column_bin_mode[col_name] = True
             else:
                 column_bin_mode[col_name] = False
@@ -113,6 +118,8 @@ class DataPreprocessor:
             q01_int: int = math.floor(q01)
             q99_int: int = math.ceil(q99)
             q100_int: int = math.ceil(q100)
+            if q100 == q100_int:
+                q100_int += 1
             step: float = (q99 - q01) / (BIN_NUMBER - 2)
             if step < MIN_BIN_STEP:
                 step = MIN_BIN_STEP

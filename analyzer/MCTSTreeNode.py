@@ -1,4 +1,3 @@
-import math
 import random
 from typing import Iterable
 
@@ -8,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from analyzer.Index import Index
+from analyzer.commons import calc_weight
 
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
@@ -57,6 +57,11 @@ class MCTSTreeNode:
         self.value: str | None = value
         self.q_value: int = 0
         self.locations: np.ndarray | None
+        self.depth: int
+        if parent is None:
+            self.depth = 0
+        else:
+            self.depth = parent.depth + 1
         self._init_location()
 
     @property
@@ -87,7 +92,7 @@ class MCTSTreeNode:
 
     @property
     def weight(self) -> float:
-        return self._calc_weight(self.error_coverage, self.error_rate)
+        return calc_weight(self.depth, self.error_coverage, self.error_rate, self.tree.data_index.total_error_rate)
 
     @property
     def is_root(self) -> bool:
@@ -103,15 +108,6 @@ class MCTSTreeNode:
                 self.locations = self_loc
             else:
                 self.locations = parent_loc & self_loc
-
-    @property
-    def depth(self):
-        node: MCTSTreeNode = self
-        depth: int = 0
-        while node.parent is not None:
-            depth += 1
-            node = node.parent
-        return depth
 
     def _select_next_column(self, columns: list[str], already_selected_col_idx: list[int]) -> str:
         rand = random.randint(0, len(columns) - 1 - len(already_selected_col_idx))
@@ -147,16 +143,11 @@ class MCTSTreeNode:
             values: Iterable = self.tree.data_index.get_values_by_column(col)
             for val in values:
                 child = MCTSTreeNode(self.tree, self, col, val)  # TODO 不满足influence_count不要创建node
-                if (child.error_coverage >= self.tree.min_error_coverage and
-                        child.error_rate >= self.tree.data_index.total_error_rate):
-                    # bin_search_nearest_lower(children, lambda c: c.)
+                # if (child.error_coverage >= self.tree.min_error_coverage and
+                #         child.error_rate >= self.tree.data_index.total_error_rate):
+                if child.error_coverage >= self.tree.min_error_coverage:
                     children.append(child)
         self.children = children
-
-    def _calc_weight(self, error_coverage: float, error_rate: float) -> float:
-        index: Index = self.tree.data_index
-        total_error_rate: float = index.total_error_rate
-        return error_coverage * (2 * abs(error_rate - total_error_rate))**3
 
     def simulate(self, simulate_times: int, max_simulate_depth: int = 10):
         """
@@ -167,12 +158,13 @@ class MCTSTreeNode:
         index: Index = self.tree.data_index
         columns_after = self.tree.data_index.get_columns_after(self.column)
         err_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
-        max_weight: float = self._calc_weight(self.error_coverage, self.error_rate)
+        max_weight: float = calc_weight(self.depth, self.error_coverage, self.error_rate, index.total_error_rate)
         for epoch in range(0, simulate_times):
             cur_locations: pd.Series = self.locations
             all_selected_col_idx: list[int] = []
             while len(all_selected_col_idx) < min(len(columns_after), max_simulate_depth):
                 next_col: str = self._select_next_column(columns_after, all_selected_col_idx)
+                # todo 小于min_error_coverage的value不要返回
                 values: list[str] = list(index.get_values_by_column(next_col))
                 weights: np.ndarray[np.float64] = np.ndarray(shape=len(values), dtype=np.float64)
                 i: int = 0
@@ -191,7 +183,8 @@ class MCTSTreeNode:
                             i += 1
                             continue
                         err_rate: float = new_error_count / new_loc_count
-                        weight: float = self._calc_weight(err_coverage, err_rate)
+                        weight: float = calc_weight(self.depth + len(all_selected_col_idx),
+                                                    err_coverage, err_rate, index.total_error_rate)
                         if np.isnan(weight) or np.isnan(np.float64(weight)):
                             pass
                     weights[i] = weight
@@ -249,22 +242,3 @@ class MCTSTreeNode:
                         max_q_child = child
                 cur.q_value = max_q_child.q_value
             cur = cur.parent
-
-    # def check(self) -> bool:
-    #     included_cols: dict[str, bool] = {}
-    #     cur: MCTSTreeNode = self
-    #     while cur.parent is not None:
-    #         included_cols[cur.column] = True
-    #         cur = cur.parent
-    #     columns_before: list[str] = self.tree.data_index.get_columns_before(self.column)
-    #     for col in columns_before:
-    #         if col in included_cols:
-    #             continue
-    #         # TODO 频率从高到低
-    #         values: Iterable = self.tree.data_index.get_values_by_column(col)
-    #         for val in values:
-    #             val_loc: np.ndarray = self.tree.data_index.get_locations(col, val)
-    #             intersect_loc: np.ndarray = self.locations & val_loc
-    #             if intersect_loc.sum() >= self.tree.threshold:
-    #                 return False
-    #     return True
