@@ -97,23 +97,15 @@ if __name__ == '__main__':
 
     data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
 
-    # data_df = data_df[data_df['term'] != 6]
+    data_df = data_df[data_df['term'] != 6]
 
     analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
                                                                   target_value=1, is_sas_dataset=False,
                                                                   min_error_coverage=0.02)
 
-    # results = [ResultPath(items=[ResultItem('isError', '1'), ResultItem('verificationStatus', '1')]),
-    #            ResultPath(items=[ResultItem('isError', '1'), ResultItem('term', '5')]),
-    #            ResultPath(items=[ResultItem('isError', '1'), ResultItem('term', '5'), ResultItem('verificationStatus', '1')])]
-    # results = chi2_filter(results, analyzer.target_column, analyzer._full_index)
-
-    # results = [ResultPath(items=[ResultItem('BAD', '1'), ResultItem('REASON', 'JonasReason')]),
-    #            ResultPath(items=[ResultItem('BAD', '1'), ResultItem('JOB', 'JonasJob')]),
-    #            ResultPath(items=[ResultItem('BAD', '1'), ResultItem('REASON', 'JonasReason'), ResultItem('JOB', 'JonasJob')])]
-    # results = chi2_filter(results, analyzer.target_column, analyzer._full_index)
-
     results: list[ResultPath] = analyzer.run()
+
+    print('\n========== Results ============')
     total_error_loc: pd.Series = analyzer.data_index.get_locations(analyzer.target_column, analyzer.target_value)
     total_error_count = total_error_loc.sum()
     total_error_rate: float = analyzer.data_index.total_error_rate
@@ -123,6 +115,8 @@ if __name__ == '__main__':
         error_count = calculated.error_count
         error_rate: float = calculated.error_rate
         error_coverage: float = calculated.error_coverage
-        print(r, '\t', "error_count: %d" % error_count, ", error_coverage: %d%%" % (100 * error_coverage),
+        print(r, '\t\t',
+              # "error_count: %d" % error_count,
+              "error_coverage: %d%%" % (100 * error_coverage),
               ", error_rate: %.2f(+%d%%)" % (error_rate, 100*(error_rate - analyzer.data_index.total_error_rate)),
               ", weight: %.2f" % calculated.weight)

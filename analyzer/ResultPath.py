@@ -14,6 +14,9 @@ class ResultItem:
     def __str__(self):
         return f"{self.column}={self.value}"
 
+    def __eq__(self, other: 'ResultItem'):
+        return self.column == other.column and self.value == other.value
+
 
 class CalculatedResult:
 

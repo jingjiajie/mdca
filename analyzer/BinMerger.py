@@ -73,8 +73,6 @@ class BinMerger:
                 merge_successful: bool = False
                 for merge_res in try_list:
                     merged_res_items: list[ResultItem] = []
-                    if key == 'ficoRangeHigh' and cur_res.items[0].value.left == 664 and merge_res.items[0].value.left == 671:
-                        pass
                     for item in cur_res.items:
                         col: str = item.column
                         if not self.column_binning[col]:
@@ -93,7 +91,8 @@ class BinMerger:
                     calc_new: CalculatedResult = new_res.calculate(self.data_index)
                     calc_cur: CalculatedResult = cur_res.calculate(self.data_index)
                     calc_compare: CalculatedResult = merge_res.calculate(self.data_index)
-                    if calc_new.weight >= calc_cur.weight and calc_new.weight >= calc_compare.weight:
+                    # TODO and/or?
+                    if calc_new.weight >= calc_cur.weight or calc_new.weight >= calc_compare.weight:
                         merge_successful = True
                         group.remove(merge_res)
                         group.append(new_res)

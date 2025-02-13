@@ -143,8 +143,6 @@ class MCTSTreeNode:
             values: Iterable = self.tree.data_index.get_values_by_column(col)
             for val in values:
                 child = MCTSTreeNode(self.tree, self, col, val)  # TODO 不满足influence_count不要创建node
-                # if (child.error_coverage >= self.tree.min_error_coverage and
-                #         child.error_rate >= self.tree.data_index.total_error_rate):
                 if child.error_coverage >= self.tree.min_error_coverage:
                     children.append(child)
         self.children = children

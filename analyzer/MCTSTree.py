@@ -53,4 +53,34 @@ class MCTSTree:
             result_items.reverse()
             result_path: ResultPath = ResultPath(result_items)
             results.append(result_path)
-        return results
+        filtered_results: list[ResultPath] = self._filter_suffix_result(results)
+        return filtered_results
+
+    def _filter_suffix_result(self, results: list[ResultPath]) -> list[ResultPath]:
+        filtered_results: list[ResultPath] = []
+        for i in range(0, len(results)):
+            res1: ResultPath = results[i]
+            should_filter_out: bool = False
+            for j in range(0, len(results)):
+                if i == j:
+                    continue
+                res2: ResultPath = results[j]
+                if len(res1.items) >= len(res2.items):
+                    continue
+                is_suffix: bool = True
+                # Check suffix
+                for k in range(0, len(res1.items)):
+                    item1: ResultItem = res1.items[-k-1]
+                    item2: ResultItem = res2.items[-k-1]
+                    if item1 != item2:
+                        is_suffix = False
+                        break
+                if not is_suffix:
+                    continue
+                if res1.locations.sum() != res2.locations.sum():
+                    continue
+                should_filter_out = True
+            if not should_filter_out:
+                filtered_results.append(res1)
+        return filtered_results
+
