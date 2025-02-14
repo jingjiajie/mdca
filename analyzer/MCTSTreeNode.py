@@ -58,6 +58,7 @@ class MCTSTreeNode:
         self.q_value: int = 0
         self.locations: np.ndarray | None
         self.depth: int
+        self.full_visited_flag: bool = False
         if parent is None:
             self.depth = 0
         else:
@@ -125,15 +126,18 @@ class MCTSTreeNode:
                 next_col_idx += skip_count
 
     def select(self) -> 'MCTSTreeNode | None':
-        if self.children is None or len(self.children) == 0:
+        if self.children is None:
             return self
         # TODO 性能优化
-        children_weights: np.ndarray[np.float64] = np.ndarray(len(self.children), dtype=np.float64)
-        for i in range(len(self.children)):
-            child: MCTSTreeNode = self.children[i]
-            children_weights[i] = child.q_value
-        weights_normalized: np.ndarray[np.float64] = children_weights/children_weights.sum()
-        selected_child: MCTSTreeNode = np.random.choice(self.children, size=1, p=weights_normalized)[0]
+        non_full_visited_children = list(filter(lambda child: not child.full_visited_flag, self.children))
+        if len(non_full_visited_children) == 0:
+            return self  # Should be root
+        weights: np.ndarray[np.float64] = np.ndarray(len(non_full_visited_children), dtype=np.float64)
+        for i in range(len(non_full_visited_children)):
+            child: MCTSTreeNode = non_full_visited_children[i]
+            weights[i] = child.q_value
+        weights_normalized: np.ndarray[np.float64] = weights/weights.sum()
+        selected_child: MCTSTreeNode = np.random.choice(non_full_visited_children, size=1, p=weights_normalized)[0]
         return selected_child.select()
 
     def expand(self):
@@ -146,6 +150,15 @@ class MCTSTreeNode:
                 if child.error_coverage >= self.tree.min_error_coverage:
                     children.append(child)
         self.children = children
+
+        if self.children is not None and len(self.children) == 0:
+            cur = self
+            while cur is not None:
+                if all(map(lambda c: c.full_visited_flag, cur.children)):
+                    cur.full_visited_flag = True
+                    cur = cur.parent
+                else:
+                    break
 
     def simulate(self, simulate_times: int, max_simulate_depth: int = 10):
         """

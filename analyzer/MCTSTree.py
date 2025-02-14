@@ -16,17 +16,16 @@ class MCTSTree:
 
     def run(self, times: int):
         for i in range(0, times):
-            # TODO 全部遍历完成提前停止！
             selected_leaf: MCTSTreeNode = self._root.select()
             if selected_leaf.children is None:
                 selected_leaf.expand()
-
-            if len(selected_leaf.children) > 0:
                 for child in selected_leaf.children:
                     child.simulate(SIMULATE_TIMES)
                     child.back_propagate()
             elif selected_leaf.is_root:
                 break
+            else:
+                raise Exception('Unexpected error: MCTS selection of ' + str(selected_leaf))
         results: list[ResultPath] = self._choose_results()
         return results
 
