@@ -1,15 +1,16 @@
+import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index
+from analyzer.Index import Index, IndexLocations
 from analyzer.commons import Value, calc_weight
 
 
 class ResultItem:
 
-    def __init__(self, column: str, value: Value | pd.Interval, locations: pd.Series):
+    def __init__(self, column: str, value: Value | pd.Interval, locations: IndexLocations):
         self.column: str = column
         self.value: Value | pd.Interval = value
-        self.locations: pd.Series = locations
+        self.locations: IndexLocations = locations
 
     def __str__(self):
         return f"{self.column}={self.value}"
@@ -32,9 +33,9 @@ class ResultPath:
 
     def __init__(self, items: list[ResultItem]):
         self.items: list[ResultItem] = items
-        self.locations: pd.Series | None
+        self.locations: IndexLocations | None
         if len(items) > 0:
-            loc: pd.Series = items[0].locations
+            loc: IndexLocations = items[0].locations
             for i in range(1, len(items)):
                 loc = loc & items[i].locations
             self.locations = loc
@@ -53,13 +54,13 @@ class ResultPath:
 
     def calculate(self, index: Index) -> CalculatedResult:
         result_items: list[ResultItem] = self.items
-        total_error_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
-        total_error_count: int = total_error_loc.sum()
+        total_error_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
+        total_error_count: int = total_error_loc.count
         if len(result_items) == 0:
             return CalculatedResult(index.total_count, total_error_count,  1, index.total_error_rate,
                                     calc_weight(0, 1, index.total_error_rate, index.total_error_rate))
-        count: int = self.locations.sum()
-        error_count: int = (self.locations & total_error_loc).sum()
+        count: int = self.locations.count
+        error_count: int = (self.locations & total_error_loc).count
         error_rate: float = error_count / count
         error_coverage: float = error_count / total_error_count
         return CalculatedResult(count, error_count, error_coverage, error_rate,

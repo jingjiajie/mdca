@@ -1,3 +1,4 @@
+import sys
 from typing import TypeAlias
 
 Value: TypeAlias = str | float | int
@@ -14,3 +15,15 @@ def calc_weight(dimensions: int, error_coverage: float, error_rate: float, total
     else:
         return dimensions ** _ALPHA * error_coverage ** _BETA * (error_rate - total_error_rate + _EPSILON) ** _GAMMA
     # return dimensions**_ALPHA * error_coverage**_BETA * error_rate**_GAMMA
+
+
+def determine_bit_depth() -> int:
+    if sys.maxsize == 2 ** 31 - 1:
+        return 32
+    elif sys.maxsize == 2 ** 63 - 1:
+        return 64
+    else:
+        raise Exception('Only 32bit or 64bit machine is supported!')
+
+
+BIT_DEPTH = determine_bit_depth()

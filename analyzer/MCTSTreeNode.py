@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index
+from analyzer.Index import Index, IndexLocations
 from analyzer.commons import calc_weight, Value
 
 if TYPE_CHECKING:
-    from MCTSTree import MCTSTree
+    from MCTSTree import MCTSTree, ColumnValueWeights
 
 
 def _bin_search_nearest_lower_int(search_list_asc: list[int], value: int, low: int | None = None, high: int | None = None) -> int:
@@ -52,13 +52,14 @@ class MCTSTreeNode:
     def __init__(self, tree: 'MCTSTree', parent: 'MCTSTreeNode | None', column: str | None, value: str | None):
         self.tree = tree
         self.parent: MCTSTreeNode = parent
-        self.children: list[MCTSTreeNode] | None = None  # TODO 改成跳表
+        self.children: list[MCTSTreeNode] | None = None
         self.column: str | None = column
         self.value: str | None = value
         self.q_value: int = 0
-        self.locations: np.ndarray | None
+        self.locations: IndexLocations
         self.depth: int
         self.full_visited_flag: bool = False
+        self._error_count: int = -1
         if parent is None:
             self.depth = 0
         else:
@@ -67,25 +68,21 @@ class MCTSTreeNode:
 
     @property
     def count(self) -> int:
-        if self.is_root:
-            return self.tree.data_index.total_count
-        else:
-            return self.locations.sum()
+        return self.locations.count
 
     @property
     def error_count(self) -> int:
-        index: Index = self.tree.data_index
-        err_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
-        if self.is_root:
-            return err_loc.sum()
+        if self._error_count != -1:
+            return self._error_count
         else:
-            return (self.locations & err_loc).sum()
+            index: Index = self.tree.data_index
+            self._error_count = (self.locations & index.total_error_locations).count
+            return self._error_count
 
     @property
     def error_coverage(self) -> float:
         index: Index = self.tree.data_index
-        err_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
-        return self.error_count / err_loc.sum()
+        return self.error_count / index.total_error_locations.count
 
     @property
     def error_rate(self) -> float:
@@ -101,14 +98,11 @@ class MCTSTreeNode:
 
     def _init_location(self):
         if self.is_root:
-            self.locations = None
+            index: Index = self.tree.data_index
+            self.locations = IndexLocations(index, np.ones(index.total_count, dtype=bool))
         else:
-            self_loc: np.ndarray = self.tree.data_index.get_locations(self.column, self.value)
-            parent_loc: np.ndarray | None = self.parent.locations
-            if parent_loc is None:
-                self.locations = self_loc
-            else:
-                self.locations = parent_loc & self_loc
+            self_loc: IndexLocations = self.tree.data_index.get_locations(self.column, self.value)
+            self.locations = self.parent.locations & self_loc
 
     def _select_next_column(self, columns: list[str], already_selected_col_idx: list[int]) -> str:
         rand = random.randint(0, len(columns) - 1 - len(already_selected_col_idx))
@@ -143,12 +137,19 @@ class MCTSTreeNode:
     def expand(self):
         children: list[MCTSTreeNode] = []
         columns_after: list[str] = self.tree.data_index.get_columns_after(self.column)
+        index: Index = self.tree.data_index
         for col in columns_after:
-            values: Iterable = self.tree.data_index.get_values_by_column(col)
+            values: Iterable = index.get_values_by_column(col)
             for val in values:
-                child = MCTSTreeNode(self.tree, self, col, val)  # TODO 不满足influence_count不要创建node
-                if child.error_coverage >= self.tree.min_error_coverage:
-                    children.append(child)
+                loc: IndexLocations = index.get_locations(col, val)
+                if loc.count < self.tree.min_error_count:
+                    continue
+                child = MCTSTreeNode(self.tree, self, col, val)
+                if child.count < self.tree.min_error_count:
+                    continue
+                if child.error_count < self.tree.min_error_count:
+                    continue
+                children.append(child)
         self.children = children
 
         if self.children is not None and len(self.children) == 0:
@@ -167,48 +168,36 @@ class MCTSTreeNode:
         :param simulate_times: times of simulation
         """
         index: Index = self.tree.data_index
+        total_error_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
         columns_after = self.tree.data_index.get_columns_after(self.column)
-        err_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
         max_weight: float = calc_weight(self.depth, self.error_coverage, self.error_rate, index.total_error_rate)
         for epoch in range(0, simulate_times):
-            cur_locations: pd.Series = self.locations
+            cur_locations: IndexLocations = self.locations
             all_selected_col_idx: list[int] = []
+            all_selected_items = []  # todo temp
             while len(all_selected_col_idx) < min(len(columns_after), max_simulate_depth):
-                next_col: str = self._select_next_column(columns_after, all_selected_col_idx)
-                # todo 小于min_error_coverage的value不要返回
-                values: list[str] = list(index.get_values_by_column(next_col))
-                weights: np.ndarray[np.float64] = np.ndarray(shape=len(values), dtype=np.float64)
-                i: int = 0
-                for val in values:
-                    val: str
-                    new_loc: pd.Series = index.get_locations(next_col, val) & cur_locations
-                    new_loc_count: int = new_loc.sum()
-                    if new_loc_count == 0:
-                        weight = 0
-                    else:
-                        new_error_loc: pd.Series = new_loc & err_loc
-                        new_error_count: int = new_error_loc.sum()
-                        err_coverage: float = new_error_count / err_loc.sum()
-                        if err_coverage < self.tree.min_error_coverage:
-                            weights[i] = 0
-                            i += 1
-                            continue
-                        err_rate: float = new_error_count / new_loc_count
-                        weight: float = calc_weight(self.depth + len(all_selected_col_idx),
-                                                    err_coverage, err_rate, index.total_error_rate)
-                        if np.isnan(weight) or np.isnan(np.float64(weight)):
-                            pass
-                    weights[i] = weight
-                    if weight > max_weight:
-                        max_weight = weight
-                    i += 1
-                if np.all(weights == 0):
+                next_col: str = self._select_next_column(columns_after, all_selected_col_idx) # todo 不要单独选列
+                column_value_weights: ColumnValueWeights = self.tree._get_value_weights_by_column(next_col)
+                if column_value_weights.max_weight == 0:
                     break
-                weights_normalized: np.ndarray[np.float64] = weights / weights.sum()
+                values: list[Value | pd.Interval] = column_value_weights.values
+                weights_normalized: np.ndarray = column_value_weights.weights_normalized
                 selected_val_idx: int = np.random.choice(len(values), size=1, p=weights_normalized)[0]
-                selected_val: Value = values[selected_val_idx]
-                selected_val_loc: pd.Series = index.get_locations(next_col, selected_val)
+                selected_val: Value | pd.Interval = values[selected_val_idx]
+                all_selected_items.append(next_col + '=' + str(selected_val))
+                selected_val_loc: IndexLocations = index.get_locations(next_col, selected_val)
                 cur_locations = cur_locations & selected_val_loc
+                if cur_locations.count < self.tree.min_error_count:
+                    break
+                cur_error_locations = cur_locations & total_error_loc
+                if cur_error_locations.count < self.tree.min_error_count:
+                    break
+                error_coverage: float = cur_error_locations.count / total_error_loc.count
+                error_rate: float = cur_error_locations.count / cur_locations.count
+                cur_weight: float = calc_weight(1, error_coverage, error_rate, index.total_error_rate)
+                if cur_weight > max_weight:
+                    max_weight = cur_weight
+            print(" --- epoch ", epoch, ':\t', ",".join(all_selected_items))
         self.q_value = max_weight
 
     def back_propagate(self):

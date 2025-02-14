@@ -60,7 +60,7 @@ class MultiDimensionalAnalyzer:
         print("Filter cost: %.2f seconds" % (time.time() - start_time))
 
         start_time = time.time()
-        results = chi2_filter(results, self.target_column, self.target_value, self.data_index)
+        results = chi2_filter(results)
         print("Chi2 test cost: %.2f seconds" % (time.time() - start_time))
 
         # remove duplicated results

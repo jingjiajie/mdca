@@ -4,7 +4,7 @@ from typing import cast, Iterable
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index
+from analyzer.Index import Index, IndexLocations
 from analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
 from analyzer.commons import Value, calc_weight
 
@@ -21,7 +21,7 @@ class BinMerger:
         for result_path in results:
             filtered_items: list[ResultItem] = []
             for item in result_path.items:
-                if item.locations.sum() == self.data_index.total_count:
+                if item.locations.count == self.data_index.total_count:
                     pass
                 else:
                     filtered_items.append(item)
@@ -96,7 +96,7 @@ class BinMerger:
                                 left: int = min(this_bin.left, merge_bin.left)
                                 right: int = max(this_bin.right, merge_bin.right)
                                 new_bin = pd.Interval(left, right, closed='left')
-                            new_loc: pd.Series = item.locations | merge_item.locations
+                            new_loc: IndexLocations = item.locations | merge_item.locations
                             new_item = ResultItem(col, new_bin, new_loc)
                             merged_res_items.append(new_item)
                     new_res: ResultPath = ResultPath(merged_res_items)
@@ -156,7 +156,7 @@ class BinMerger:
         #                 left: int = min(this_bin.left, merge_bin.left)
         #                 right: int = max(this_bin.right, merge_bin.right)
         #                 new_bin: pd.Interval = pd.Interval(left, right, closed='left')
-        #                 new_loc: pd.Series = item.locations | merge_item.locations
+        #                 new_loc: IndexLocations = item.locations | merge_item.locations
         #                 new_item = ResultItem(col, new_bin, new_loc)
         #                 merged_res_items.append(new_item)
         #         new_res: ResultPath = ResultPath(merged_res_items)
@@ -197,27 +197,25 @@ class BinMerger:
     def expand(self, results: list[ResultPath]):
         final_results: list[ResultPath] = []
         index: Index = self.data_index
-        total_loc: pd.Series = np.ones(self.data_index.total_count, dtype=bool)
-        total_error_loc: pd.Series = index.get_locations(index.target_column, index.target_value)
-        total_error_count: int = total_error_loc.sum()
+        total_loc: IndexLocations = IndexLocations(index, np.ones(self.data_index.total_count, dtype=bool))
+        total_error_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
+        total_error_count: int = total_error_loc.count
         for result_path in results:
             expanded_result_items: list[ResultItem] = [m for m in result_path.items]
-            if len(result_path.items) == 1 and result_path.items[0].column == 'subGrade_trans':
-                pass
             for item_pos in range(0, len(expanded_result_items)):
                 result_item: ResultItem = expanded_result_items[item_pos]
-                # result_weight: float = ResultPath(expanded_result_items).calculate(index).weight
-                tmp_calc = ResultPath(expanded_result_items).calculate(index)
+                result_calc: CalculatedResult = ResultPath(expanded_result_items).calculate(index)
                 col: str = result_item.column
                 val: Value | pd.Interval = result_item.value
                 if not self.column_binning[col] or (type(val) is not pd.Interval):
                     continue
                 this_bin: pd.Interval = cast(pd.Interval, val)
-                all_bins: list[pd.Interval] = [v for v in index.get_values_by_column(col) if type(v) is pd.Interval]
+                all_bins: list[pd.Interval] = \
+                    [v for v in index.get_values_by_column(col) if type(v) is pd.Interval]
                 # 提前计算缓存
                 all_bins_asc = sorted(all_bins, key=lambda interval: interval.left)
 
-                other_items_loc: pd.Series = total_loc
+                other_items_loc: IndexLocations = total_loc
                 for i in range(0, len(expanded_result_items)):
                     if expanded_result_items[i].column == col:
                         continue
@@ -232,8 +230,8 @@ class BinMerger:
 
                 upper_bin_pos: int = this_bin_pos
                 lower_bin_pos: int = this_bin_pos
-                _merged_bin_loc: pd.Series = index.get_locations(col, this_bin)
-                last_weight: float = tmp_calc.weight
+                _merged_bin_loc: IndexLocations = index.get_locations(col, this_bin)
+                last_weight: float = result_calc.weight
 
                 # Merge bin
                 for direction in ['up', 'down']:
@@ -242,21 +240,17 @@ class BinMerger:
                     step: int = 1 if direction == 'up' else -1
                     for bin_pos in range(start, end, step):
                         next_bin: pd.Interval = all_bins_asc[bin_pos]
-                        next_loc: pd.Series = index.get_locations(col, next_bin)
+                        next_loc: IndexLocations = index.get_locations(col, next_bin)
                         new_merged_bin_loc = _merged_bin_loc | next_loc
-                        new_result_loc: pd.Series = other_items_loc & new_merged_bin_loc
-                        new_result_err_loc: pd.Series = new_result_loc & total_error_loc
-                        new_result_count: int = new_result_loc.sum()
-                        new_error_count: int = new_result_err_loc.sum()
+                        new_result_loc: IndexLocations = other_items_loc & new_merged_bin_loc
+                        new_result_err_loc: IndexLocations = new_result_loc & total_error_loc
+                        new_result_count: int = new_result_loc.count
+                        new_error_count: int = new_result_err_loc.count
                         new_error_rate: float = new_error_count / new_result_count
                         new_error_coverage: float = new_error_count / total_error_count
                         new_weight: float = calc_weight(len(expanded_result_items), new_error_coverage,
                                                         new_error_rate, index.total_error_rate)
                         if new_weight >= last_weight:
-                            # print("###",result_path, ', old:', result_item, ", new:", next_bin,
-                            #       ", error_cov: %.2f->%.2f" % (tmp_calc.error_coverage, new_error_coverage),
-                            #       ", error_rate: %.2f->%.2f" % (tmp_calc.error_rate, new_error_rate),
-                            #       ", weight: %.2f->%.2f" % (result_weight, new_weight))
                             _merged_bin_loc = new_merged_bin_loc
                             last_weight = new_error_rate
                             if direction == 'up':
@@ -265,36 +259,6 @@ class BinMerger:
                                 lower_bin_pos = bin_pos
                         else:
                             break
-
-                # # Remove bin
-                # for direction in ['up', 'down']:
-                #     start: int = upper_bin_pos if direction == 'down' else lower_bin_pos
-                #     end: int = lower_bin_pos if direction == 'down' else upper_bin_pos
-                #     step: int = -1 if direction == 'down' else 1
-                #     for bin_pos in range(start, end, step):
-                #         edge_bin: pd.Interval = all_bins_asc[bin_pos]
-                #         edge_bin_loc: pd.Series = index.get_locations(col, edge_bin)
-                #         new_merged_bin_loc: pd.Series = _merged_bin_loc & ~edge_bin_loc
-                #         new_result_loc: pd.Series = other_items_loc & new_merged_bin_loc
-                #         new_result_err_loc: pd.Series = new_result_loc & total_error_loc
-                #         new_result_count: int = new_result_loc.sum()
-                #         new_error_count: int = new_result_err_loc.sum()
-                #         new_error_rate: float = new_error_count / new_result_count
-                #         new_error_coverage: float = new_error_count / total_error_count
-                #         new_weight: float = calc_weight(new_error_coverage, new_error_rate, index.total_error_rate)
-                #         if new_weight >= last_weight:
-                #             print("@@@",result_path, ', old:', result_item, ", new:", edge_bin,
-                #                   ", error_cov: %.2f->%.2f" % (tmp_calc.error_coverage, new_error_coverage),
-                #                   ", error_rate: %.2f->%.2f" % (tmp_calc.error_rate, new_error_rate),
-                #                   ", weight: %.2f->%.2f" % (result_weight, new_weight))
-                #             _merged_bin_loc = new_merged_bin_loc
-                #             last_weight = new_error_rate
-                #             if direction == 'down':
-                #                 upper_bin_pos = bin_pos
-                #             else:
-                #                 lower_bin_pos = bin_pos
-                #         else:
-                #             break
 
                 lower_merge_bin: pd.Interval = all_bins_asc[lower_bin_pos]
                 upper_merge_bin: pd.Interval = all_bins_asc[upper_bin_pos]

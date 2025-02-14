@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index
+from analyzer.Index import Index, IndexLocations
 from analyzer.MultiDimensionalAnalyzer import MultiDimensionalAnalyzer
 from analyzer.ResultPath import ResultPath
 
@@ -82,6 +82,7 @@ def mock_hmeq_data() -> pd.DataFrame:
     data_df = data_df._append(new_rows, ignore_index=True)
     return data_df
 
+
 if __name__ == '__main__':
     random.seed(time.time())
 
@@ -96,9 +97,13 @@ if __name__ == '__main__':
     #                                                               target_value=1, is_sas_dataset=True,
     #                                                               min_error_coverage=0.05)
 
-    # data_df: pd.DataFrame = pd.read_csv('data/flights/flights_processed.csv')
+    data_df: pd.DataFrame = pd.read_csv('data/flights/flights.csv')
 
-    # data_df.dropna(inplace=True, subset=['AIR_SYSTEM_DELAY'])
+    data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
+                             data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
+                             data_df['WEATHER_DELAY'].isna())
+    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED',
+                                                                  target_value=1, min_error_coverage=0.01)
 
     # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
     #
@@ -112,13 +117,9 @@ if __name__ == '__main__':
     index: Index = analyzer.data_index
     print('\n========== Overall ============')
     print("total count: %d" % index.total_count)
-    print("error_rate: %d%%" % index.total_error_rate*100)
+    print("error_rate: %d%%" % (index.total_error_rate * 100))
 
     print('\n========== Results ============')
-    total_error_loc: pd.Series = analyzer.data_index.get_locations(analyzer.target_column, analyzer.target_value)
-    total_error_count = total_error_loc.sum()
-    total_error_rate: float = analyzer.data_index.total_error_rate
-    total_count: int = analyzer.data_index.total_count
     for r in results:
         calculated = r.calculate(analyzer.data_index)
         error_count = calculated.error_count
@@ -127,5 +128,5 @@ if __name__ == '__main__':
         print(r, '\t\t',
               # "error_count: %d" % error_count,
               "error_coverage: %d%%" % (100 * error_coverage),
-              ", error_rate: %.2f(%+d%%)" % (error_rate, 100*(error_rate - index.total_error_rate)),
+              ", error_rate: %.2f(%+d%%)" % (error_rate, 100 * (error_rate - index.total_error_rate)),
               ", weight: %.2f" % calculated.weight)
