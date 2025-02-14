@@ -5,6 +5,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from analyzer.Index import Index
 from analyzer.MultiDimensionalAnalyzer import MultiDimensionalAnalyzer
 from analyzer.ResultPath import ResultPath
 
@@ -88,22 +89,30 @@ if __name__ == '__main__':
     #
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
     #                                                               target_value=1, is_sas_dataset=True,
-    #                                                               min_error_coverage=0.2)
+    #                                                               min_error_coverage=0.05)
 
     # data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
+    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
+    #                                                               target_value=1, is_sas_dataset=True,
+    #                                                               min_error_coverage=0.05)
+
     # data_df: pd.DataFrame = pd.read_csv('data/flights/flights_processed.csv')
 
     # data_df.dropna(inplace=True, subset=['AIR_SYSTEM_DELAY'])
 
-    data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
-
-    data_df = data_df[data_df['term'] != 6]
-
-    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
-                                                                  target_value=1, is_sas_dataset=False,
-                                                                  min_error_coverage=0.02)
+    # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
+    #
+    # data_df = data_df[data_df['term'] != 6]
+    #
+    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
+    #                                                               target_value=1, is_sas_dataset=False,
+    #                                                               min_error_coverage=0.02)
 
     results: list[ResultPath] = analyzer.run()
+    index: Index = analyzer.data_index
+    print('\n========== Overall ============')
+    print("total count: %d" % index.total_count)
+    print("error_rate: %d%%" % index.total_error_rate*100)
 
     print('\n========== Results ============')
     total_error_loc: pd.Series = analyzer.data_index.get_locations(analyzer.target_column, analyzer.target_value)
@@ -118,5 +127,5 @@ if __name__ == '__main__':
         print(r, '\t\t',
               # "error_count: %d" % error_count,
               "error_coverage: %d%%" % (100 * error_coverage),
-              ", error_rate: %.2f(+%d%%)" % (error_rate, 100*(error_rate - analyzer.data_index.total_error_rate)),
+              ", error_rate: %.2f(%+d%%)" % (error_rate, 100*(error_rate - index.total_error_rate)),
               ", weight: %.2f" % calculated.weight)

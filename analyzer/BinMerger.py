@@ -58,6 +58,13 @@ class BinMerger:
                                 should_merge = False
                                 break
                         else:  # Is bin column
+                            if (issubclass(type(item.value), float)  # To handle nan
+                                    or issubclass(type(compare_item.value), float)):
+                                if item.value is compare_item:
+                                    continue
+                                else:
+                                    should_merge = False
+                                    break
                             this_bin: pd.Interval = cast(pd.Interval, item.value)
                             compare_bin: pd.Interval = cast(pd.Interval, compare_item.value)
                             if this_bin.right < compare_bin.left or this_bin.left > compare_bin.right:
@@ -79,11 +86,16 @@ class BinMerger:
                             merged_res_items.append(item)
                         else:
                             merge_item: ResultItem = merge_res[col]
-                            this_bin: pd.Interval = cast(pd.Interval, item.value)
-                            merge_bin: pd.Interval = cast(pd.Interval, merge_item.value)
-                            left: int = min(this_bin.left, merge_bin.left)
-                            right: int = max(this_bin.right, merge_bin.right)
-                            new_bin: pd.Interval = pd.Interval(left, right, closed='left')
+                            new_bin: pd.Interval | float
+                            if (item.value is merge_item.value  # Handle nan
+                                    and issubclass(type(item.value), float) and np.isnan(item.value)):
+                                new_bin = item.value
+                            else:
+                                this_bin: pd.Interval = cast(pd.Interval, item.value)
+                                merge_bin: pd.Interval = cast(pd.Interval, merge_item.value)
+                                left: int = min(this_bin.left, merge_bin.left)
+                                right: int = max(this_bin.right, merge_bin.right)
+                                new_bin = pd.Interval(left, right, closed='left')
                             new_loc: pd.Series = item.locations | merge_item.locations
                             new_item = ResultItem(col, new_bin, new_loc)
                             merged_res_items.append(new_item)

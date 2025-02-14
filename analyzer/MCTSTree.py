@@ -15,6 +15,7 @@ class MCTSTree:
         self._result: list[ResultPath] = []  # descending ordered
 
     def run(self, times: int):
+        i: int = 0
         for i in range(0, times):
             selected_leaf: MCTSTreeNode = self._root.select()
             if selected_leaf.children is None:
@@ -26,6 +27,7 @@ class MCTSTree:
                 break
             else:
                 raise Exception('Unexpected error: MCTS selection of ' + str(selected_leaf))
+        print("MCTS Rounds: %d" % i)
         results: list[ResultPath] = self._choose_results()
         return results
 

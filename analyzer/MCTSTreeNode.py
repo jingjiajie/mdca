@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from analyzer.Index import Index
-from analyzer.commons import calc_weight
+from analyzer.commons import calc_weight, Value
 
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
@@ -205,7 +205,8 @@ class MCTSTreeNode:
                 if np.all(weights == 0):
                     break
                 weights_normalized: np.ndarray[np.float64] = weights / weights.sum()
-                selected_val: str = np.random.choice(values, size=1, p=weights_normalized)[0]
+                selected_val_idx: int = np.random.choice(len(values), size=1, p=weights_normalized)[0]
+                selected_val: Value = values[selected_val_idx]
                 selected_val_loc: pd.Series = index.get_locations(next_col, selected_val)
                 cur_locations = cur_locations & selected_val_loc
         self.q_value = max_weight
