@@ -1,74 +1,156 @@
+import threading
+from enum import Enum
 from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from lru import LRU
 
-from analyzer.commons import Value, determine_bit_depth, BIT_DEPTH
+from analyzer.commons import Value
 
-BOOL_INDEX_CACHE_SIZE: int = 200
+# TODO 改成比例
+ROW_NUMBER_INTERSECT_THRESHOLD: int = 160000
+ROW_NUMBER_FAST_INTERCEPT_COUNT_THRESHOLD: int = 500000
+
+_thread_local: threading.local = threading.local()
+
+class IndexLocationType(Enum):
+    BOOL = 0
+    ROW_NUMBER = 1
 
 
 class IndexLocations:
-    def __init__(self, index: 'Index', locations: np.ndarray, cache_key=None):
+    def __init__(self, index: 'Index', locations: np.ndarray):
         self.index: Index = index
-        self._cache_key = cache_key
         self.count: int
-        self._locations: np.ndarray
+        self.best_type: IndexLocationType
+        self._locations_bool: np.ndarray | None = None
+        self._locations_row_number: np.ndarray | None = None
+
         if locations.dtype == bool:
-            self.count = locations.sum()
-            if self.count >= self.index.directly_store_bool_index_threshold:
-                self._locations = locations
+            self.count = np.count_nonzero(locations)
+            if self.count < self.index.directly_store_bool_index_threshold:
+                self.best_type = IndexLocationType.ROW_NUMBER
+                self._locations_row_number = np.array(np.nonzero(locations)[0], dtype=np.uint32)
             else:
-                self._locations = np.array(np.nonzero(locations), dtype=np.uint32)
+                self.best_type = IndexLocationType.BOOL
+                self._locations_bool = locations
         elif locations.dtype == np.uint32:
             self.count = len(locations)
             if self.count >= self.index.directly_store_bool_index_threshold:
+                self.best_type = IndexLocationType.BOOL
                 loc_bool: np.ndarray = np.zeros(self.index.total_count, dtype=bool)
                 loc_bool[locations] = 1
-                self._locations = loc_bool
+                self._locations_bool = loc_bool
             else:
-                self._locations = locations
+                self.best_type = IndexLocationType.ROW_NUMBER
+                self._locations_row_number = locations
         else:
-            raise Exception('Unexpected index dtype: ', self._locations.dtype)
+            raise Exception('Unexpected index dtype: ', locations.dtype)
 
-    def _get_bool_index(self):
-        if self._locations.dtype == bool:
-            return self._locations
-        elif self._locations.dtype == np.uint32:
-            if self._cache_key is not None and self._cache_key in self.index.bool_index_cache:
-                return self.index.bool_index_cache[self._cache_key]
-            else:
+    def cache(self, index_type: IndexLocationType):
+        if index_type == IndexLocationType.BOOL:
+            self._get_bool_index(calculate_if_need=True, cache_calculated_result=True)
+        elif index_type == IndexLocationType.ROW_NUMBER:
+            self._get_row_number_index(calculate_if_need=True, cache_calculated_result=True)
+
+    def clear_cache(self):
+        if self.best_type == IndexLocationType.BOOL:
+            self._locations_row_number = None
+        elif self.best_type == IndexLocationType.ROW_NUMBER:
+            self._locations_bool = None
+
+    def _get_bool_index(self, calculate_if_need: bool, cache_calculated_result: bool) -> np.ndarray | None:
+        if self._locations_bool is not None:
+            return self._locations_bool
+        elif calculate_if_need:
+            if self._locations_row_number is not None:
                 loc_bool: np.ndarray = np.zeros(self.index.total_count, dtype=bool)
-                loc_bool[self._locations] = 1
-                if self._cache_key is not None:
-                    self.index.bool_index_cache[self._cache_key] = loc_bool
+                loc_bool[self._locations_row_number] = 1
+                if cache_calculated_result:
+                    self._locations_bool = loc_bool
                 return loc_bool
-        else:
-            raise Exception('Unexpected index dtype: ', self._locations.dtype)
+        return None
+
+    def _get_row_number_index(self, calculate_if_need: bool, cache_calculated_result: bool) -> np.ndarray | None:
+        if self._locations_row_number is not None:
+            return self._locations_row_number
+        elif calculate_if_need:
+            if self._locations_bool is not None:
+                loc_row_number: np.ndarray = np.array(np.nonzero(self._locations_bool)[0], dtype=np.uint32)
+                if cache_calculated_result:
+                    self._locations_row_number = loc_row_number
+                return loc_row_number
+        return None
+
+    def fast_intersect_count(self, other: 'IndexLocations') -> int | None:
+        if (self.count >= ROW_NUMBER_FAST_INTERCEPT_COUNT_THRESHOLD and
+                other.count >= ROW_NUMBER_FAST_INTERCEPT_COUNT_THRESHOLD):
+            return None
+        loc_bool: np.ndarray | None = None
+        loc_row_number: np.ndarray | None = None
+
+        if (self.count < ROW_NUMBER_FAST_INTERCEPT_COUNT_THRESHOLD and
+                other.count < ROW_NUMBER_FAST_INTERCEPT_COUNT_THRESHOLD):
+            if (self._locations_row_number is not None and self._locations_bool is not None
+                    and other._locations_row_number is not None and other._locations_bool is not None):
+                if self.count < other.count:
+                    loc_row_number = self._locations_row_number
+                    loc_bool = other._locations_bool
+                else:
+                    loc_row_number = other._locations_row_number
+                    loc_bool = self._locations_bool
+            else:
+                if self._locations_row_number is not None and other._locations_bool is not None:
+                    loc_row_number = self._locations_row_number
+                    loc_bool = other._locations_bool
+                elif self._locations_bool is not None and other._locations_row_number is not None:
+                    loc_row_number = other._locations_row_number
+                    loc_bool = self._locations_bool
+
+        if loc_bool is None or loc_row_number is None:
+            for a, b in [(self, other), (other, self)]:
+                loc_bool = None
+                loc_row_number = None
+                if b.count >= ROW_NUMBER_FAST_INTERCEPT_COUNT_THRESHOLD:  # a.count < threshold
+                    if a._locations_row_number is not None and b._locations_bool is not None:
+                        loc_row_number = a._locations_row_number
+                        loc_bool = b._locations_bool
+                if loc_bool is not None and loc_row_number is not None:
+                    break
+
+        if loc_bool is None or loc_row_number is None:
+            return None
+        selected_vec: np.ndarray = loc_bool[loc_row_number]
+        return np.count_nonzero(selected_vec)
 
     def __and__(self, other: 'IndexLocations') -> 'IndexLocations':
-        bool_idx_self: np.ndarray = self._get_bool_index()
-        bool_idx_other: np.ndarray = other._get_bool_index()
-        new_bool_idx: np.ndarray = bool_idx_self & bool_idx_other
-        return IndexLocations(self.index, new_bool_idx)
+        if self.count + other.count < ROW_NUMBER_INTERSECT_THRESHOLD:
+            loc_self: np.ndarray = self._get_row_number_index(calculate_if_need=True, cache_calculated_result=False)
+            loc_other: np.ndarray = other._get_row_number_index(calculate_if_need=True, cache_calculated_result=False)
+            new_loc: np.uint32 = np.intersect1d(loc_self, loc_other, assume_unique=True)
+            return IndexLocations(self.index, new_loc)
+        else:
+            bool_idx_self: np.ndarray = self._get_bool_index(calculate_if_need=True, cache_calculated_result=False)
+            bool_idx_other: np.ndarray = other._get_bool_index(calculate_if_need=True, cache_calculated_result=False)
+            new_bool_idx: np.ndarray = bool_idx_self & bool_idx_other
+            return IndexLocations(self.index, new_bool_idx)
 
     def __or__(self, other: 'IndexLocations') -> 'IndexLocations':
-        bool_idx_self: np.ndarray = self._get_bool_index()
-        bool_idx_other: np.ndarray = other._get_bool_index()
+        bool_idx_self: np.ndarray = self._get_bool_index(calculate_if_need=True, cache_calculated_result=False)
+        bool_idx_other: np.ndarray = other._get_bool_index(calculate_if_need=True, cache_calculated_result=False)
         new_bool_idx: np.ndarray = bool_idx_self | bool_idx_other
         return IndexLocations(self.index, new_bool_idx)
 
     def __invert__(self) -> 'IndexLocations':
-        bool_idx_self: np.ndarray = self._get_bool_index()
+        bool_idx_self: np.ndarray = self._get_bool_index(calculate_if_need=True, cache_calculated_result=False)
         new_loc: np.ndarray = ~bool_idx_self
-        return IndexLocations(self.index, new_loc, None)
+        return IndexLocations(self.index, new_loc)
 
 
 class Index:
 
     def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value):
-        self.directly_store_bool_index_threshold: int = int(len(data_df) * 1 / (8 if BIT_DEPTH == 64 else 4))
+        self.directly_store_bool_index_threshold: int = int(len(data_df) * 1 / 4)  # sizeof(np.uint32)
         self._index: dict[str, dict[Value, IndexLocations]]
         self._init_index(data_df, column_types, target_column, target_value)
         self.target_column: str = target_column
@@ -89,11 +171,6 @@ class Index:
             else:
                 filtered_columns.append(col)
         self.non_target_columns: list[str] = filtered_columns
-        self.bool_index_cache = LRU(BOOL_INDEX_CACHE_SIZE)
-
-    @staticmethod
-    def _get_cache_key(column: str, value: Value | pd.Interval) -> str:
-        return column + '=' + str(value)
 
     def _init_index(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value):
         col_indexes: dict[str, dict[Value, IndexLocations]] = {}  # ndarray of bool/np.uint32
@@ -112,10 +189,10 @@ class Index:
                     val: Value | pd.Interval
                     if is_float_col and issubclass(type(val), float) and np.isnan(val):
                         non_na_loc: np.ndarray = data_df[col_name].isna().to_numpy(copy=False)
-                        col_indexes[col_name][val] = IndexLocations(self, non_na_loc, self._get_cache_key(col_name, val))
+                        col_indexes[col_name][val] = IndexLocations(self, non_na_loc)
                     else:
                         val_loc: np.ndarray = (data_df[col_name] == val).to_numpy(copy=False)
-                        col_indexes[col_name][val] = IndexLocations(self, val_loc, self._get_cache_key(col_name, val))
+                        col_indexes[col_name][val] = IndexLocations(self, val_loc)
             else:
                 is_float_col: bool = column_types[col_name] == 'float'
                 col_index = {}
@@ -131,8 +208,7 @@ class Index:
                 for val, non_zero_list in col_index.items():
                     val: Value | pd.Interval
                     non_zero_list: list[int]
-                    col_indexes[col_name][val] = IndexLocations(self, np.array(non_zero_list, dtype=np.uint32),
-                                                                self._get_cache_key(col_name, val))
+                    col_indexes[col_name][val] = IndexLocations(self, np.array(non_zero_list, dtype=np.uint32))
         self._index = col_indexes
 
     def get_columns_after(self, column: str | None):
@@ -150,4 +226,44 @@ class Index:
 
     def get_locations(self, column: str, value: Value | pd.Interval) -> IndexLocations:
         return self._index[column][value]
+
+    @staticmethod
+    def fast_predict_intersect_count_less_than(
+            location_list: list[IndexLocations], min_intersect_count: int, sample_rate: int = 0.01) -> bool:
+        bool_index_list: list[np.ndarray] = []
+        for loc in location_list:
+            if loc._locations_bool is None:
+                raise Exception('Only bool index is supported!')
+            elif len(loc._locations_bool) != len(location_list[0]._locations_bool):
+                raise Exception('Input bool indexes must have same length!')
+            bool_index_list.append(loc._locations_bool)
+        length: int = len(bool_index_list[0])
+        total_sample_count: int = int(length * sample_rate)
+        tmp_index_key: str = "temp_bool_index_" + str(total_sample_count)
+        if not hasattr(_thread_local, tmp_index_key):
+            _thread_local.__setattr__(tmp_index_key, np.ndarray(total_sample_count, dtype=bool))
+        sampled_intersection: np.ndarray = _thread_local.__getattribute__(tmp_index_key)
+        sampled_intersection[:] = 1
+        for bool_index in bool_index_list:
+            sampled: np.ndarray = np.lib.stride_tricks.as_strided(
+                bool_index, shape=(total_sample_count,), strides=(int(1/sample_rate),), writeable=False)
+            sampled_intersection &= sampled
+        sampled_nonzero_count: int = np.count_nonzero(sampled_intersection)
+        estimated_total_nonzero_count: int = int(sampled_nonzero_count / sample_rate)
+
+        # Index.pred += 1
+        # cur_loc: IndexLocations = location_list[0]
+        # for loc in location_list:
+        #     cur_loc = cur_loc & loc
+        # if estimated_total_nonzero_count / min_intersect_count < 0.8:
+        #     if cur_loc.count >= min_intersect_count:
+        #         Index.pred_wrong += 1
+        #         print("### PREDICT WRONG! pred: %d, wrong: %d, sample_estimate: %d, real_count: %d" %
+        #               (Index.pred, Index.pred_wrong, estimated_total_nonzero_count, cur_loc.count))
+
+        if estimated_total_nonzero_count / min_intersect_count < 0.8:
+            return True
+        else:
+            return False
+
 

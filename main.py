@@ -102,13 +102,13 @@ if __name__ == '__main__':
     data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
                              data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
                              data_df['WEATHER_DELAY'].isna())
+    data_df.drop(['AIR_SYSTEM_DELAY', 'SECURITY_DELAY', 'AIRLINE_DELAY', 'LATE_AIRCRAFT_DELAY', 'WEATHER_DELAY'],
+                 axis=1, inplace=True)
     analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED',
-                                                                  target_value=1, min_error_coverage=0.01)
+                                                                  target_value=1, min_error_coverage=0.02)
 
     # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
-    #
     # data_df = data_df[data_df['term'] != 6]
-    #
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
     #                                                               target_value=1, is_sas_dataset=False,
     #                                                               min_error_coverage=0.02)
