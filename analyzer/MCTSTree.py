@@ -1,5 +1,4 @@
 import time
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -7,10 +6,7 @@ import pandas as pd
 from analyzer.Index import Index, IndexLocations, IndexLocationType
 from analyzer.MCTSTreeNode import MCTSTreeNode
 from analyzer.ResultPath import ResultPath, ResultItem
-from analyzer.commons import Value, calc_weight
-
-# TODO 动态自适应
-SIMULATE_TIMES: int = 10
+from analyzer.commons import Value
 
 
 class MCTSTree:
@@ -19,24 +15,25 @@ class MCTSTree:
         self.data_index: Index = data_index
         self.min_error_coverage: float = min_error_coverage
         self.min_error_count: int = int(data_index.total_error_count * self.min_error_coverage)
-        self._root: MCTSTreeNode = MCTSTreeNode(self, None, None, None,
-                                                IndexLocations(data_index, np.ones(data_index.total_count, dtype=bool)))
+        self._root: MCTSTreeNode = MCTSTreeNode(
+            self, None, None, None,
+            IndexLocations(np.ones(data_index.total_count, dtype=bool), data_index.total_count))
 
-        self._column_values_satisfy_min_error_coverage: dict[str, dict[Value | pd.Interval, (IndexLocations, IndexLocations)]] = {}
+        self._column_values_satisfy_min_error_coverage: dict[str, dict[Value | pd.Interval, IndexLocations]] = {}
         for col in data_index.get_columns_after(None):
             self._column_values_satisfy_min_error_coverage[col] = {}
             for val in data_index.get_values_by_column(col):
                 loc: IndexLocations = data_index.get_locations(col, val)
                 if loc.count < self.min_error_count:
                     continue
-                err_loc: IndexLocations = loc & data_index.total_error_locations
-                if err_loc.count < self.min_error_count:
-                    continue
-                err_loc.cache(IndexLocationType.BOOL)
-                self._column_values_satisfy_min_error_coverage[col][val] = (loc, err_loc)
+                loc.cache(IndexLocationType.BOOL)
+                loc.cache(IndexLocationType.ROW_NUMBER)
+                self._column_values_satisfy_min_error_coverage[col][val] = loc
+        data_index.total_error_locations.cache(IndexLocationType.BOOL)
+        data_index.total_error_locations.cache(IndexLocationType.ROW_NUMBER)
 
     def _get_values_satisfy_min_error_coverage_by_column(self, column: str) \
-            -> dict[Value | pd.Interval, (IndexLocations, IndexLocations)]:
+            -> dict[Value | pd.Interval, IndexLocations]:
         return self._column_values_satisfy_min_error_coverage[column]
 
     def run(self, times: int):
@@ -49,6 +46,7 @@ class MCTSTree:
             if selected_leaf.children is None:
                 start = time.time()
                 selected_leaf.expand()
+                assert selected_leaf.children is not None
                 print("Expand cost [%dms], children: %d" % ((time.time() - start)*1000, len(selected_leaf.children)))
                 for child in selected_leaf.children:
                     child.simulate()
@@ -58,10 +56,10 @@ class MCTSTree:
             else:
                 raise Exception('Unexpected error: MCTS selection of ' + str(selected_leaf))
         print("MCTS ended, rounds: %d" % i)
-        results: list[ResultPath] = self._choose_results()
+        results: list[ResultPath] = self._select_results()
         return results
 
-    def _choose_results(self, max_results: int = 1000) -> list[ResultPath]:
+    def _select_results(self, max_results: int = 1000) -> list[ResultPath]:
         results: list[ResultPath] = []
         for i in range(0, max_results):
             cur: MCTSTreeNode = self._root
@@ -76,13 +74,15 @@ class MCTSTree:
                     cur = max_q_child
             if cur.is_root:
                 break
-            cur.pick()
+            selected_node: MCTSTreeNode = cur
+            selected_node.pick()
             result_items: list[ResultItem] = []
+            cur = selected_node
             while cur.parent is not None:
                 result_items.append(ResultItem(cur.column, cur.value, self.data_index.get_locations(cur.column, cur.value)))
                 cur = cur.parent
             result_items.reverse()
-            result_path: ResultPath = ResultPath(result_items)
+            result_path: ResultPath = ResultPath(result_items, selected_node.locations)
             results.append(result_path)
         filtered_results: list[ResultPath] = self._filter_suffix_result(results)
         return filtered_results

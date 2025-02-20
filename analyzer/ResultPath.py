@@ -31,14 +31,9 @@ class CalculatedResult:
 
 class ResultPath:
 
-    def __init__(self, items: list[ResultItem]):
+    def __init__(self, items: list[ResultItem], locations: IndexLocations):
         self.items: list[ResultItem] = items
-        self.locations: IndexLocations | None
-        if len(items) > 0:
-            loc: IndexLocations = items[0].locations
-            for i in range(1, len(items)):
-                loc = loc & items[i].locations
-            self.locations = loc
+        self.locations: IndexLocations | None = locations
 
     def __str__(self):
         item_str_list: list[str] = []

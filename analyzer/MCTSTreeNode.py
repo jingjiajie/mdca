@@ -1,24 +1,22 @@
-import random
-import time
-from typing import Iterable
+import weakref
 
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index, IndexLocations, ROW_NUMBER_INTERSECT_THRESHOLD, IndexLocationType
+from analyzer.Index import Index, IndexLocations, IndexLocationType
 from analyzer.commons import calc_weight, Value
 
 if TYPE_CHECKING:
-    from MCTSTree import MCTSTree, ColumnValueWeights
+    from MCTSTree import MCTSTree
 
 
 class MCTSTreeNode:
 
     def __init__(self, tree: 'MCTSTree', parent: 'MCTSTreeNode | None', column: str | None, value: str | None,
                  locations: IndexLocations):
-        self.tree = tree
+        self._tree_weak_ref = weakref.ref(tree)
         self.parent: MCTSTreeNode = parent
         self.children: list[MCTSTreeNode] | None = None
         self.column: str | None = column
@@ -33,6 +31,18 @@ class MCTSTreeNode:
         else:
             self.depth = parent.depth + 1
         # self._init_location()
+
+    @property
+    def tree(self) -> 'MCTSTree':
+        return self._tree_weak_ref()
+
+    @property
+    def total_nbytes(self) -> int:
+        byte_count: int = self.locations.nbytes
+        if self.children is not None:
+            for child in self.children:
+                byte_count += child.total_nbytes
+        return byte_count
 
     @property
     def count(self) -> int:
@@ -93,9 +103,9 @@ class MCTSTreeNode:
 
     def expand(self):
         try:
+            index: Index = self.tree.data_index
             children: list[MCTSTreeNode] = []
             columns_after: list[str] = self.tree.data_index.get_columns_after(self.column)
-            self.locations.cache(IndexLocationType.BOOL)
             try_count = 0
             try_error_count = 0
             fast_predict_fail_count = 0
@@ -103,18 +113,21 @@ class MCTSTreeNode:
             for col in columns_after:
                 value_dict: dict[Value | pd.Interval, IndexLocations] =\
                     self.tree._get_values_satisfy_min_error_coverage_by_column(col)
-                for val, (loc, err_loc) in value_dict.items():
+                for val, val_loc in value_dict.items():
                     try_count += 1
-                    fast_fail_predict: bool = Index.fast_predict_intersect_count_less_than(
-                        [self.locations, err_loc], self.tree.min_error_count)
-                    if fast_fail_predict:
+                    self.locations.cache(IndexLocationType.BOOL)
+                    fast_predict_intersect_count: bool | None = Index.fast_predict_bool_intersect_count(
+                        [self.locations, val_loc, index.total_error_locations])
+                    if (fast_predict_intersect_count is not None and
+                            fast_predict_intersect_count < self.tree.min_error_count * 0.8):
                         fast_predict_fail_count += 1
                         continue
-                    fast_intersect_count: int | None = self.locations.fast_intersect_count(loc)
+                    self.locations.cache(IndexLocationType.ROW_NUMBER)
+                    fast_intersect_count: int | None = self.locations.fast_intersect_count(val_loc)
                     if fast_intersect_count is not None and fast_intersect_count < self.tree.min_error_count:
                         fast_fail_count += 1
                         continue
-                    child_loc: IndexLocations = self.locations & loc
+                    child_loc: IndexLocations = self.locations & val_loc
                     child = MCTSTreeNode(self.tree, self, col, val, child_loc)
                     if child.count < self.tree.min_error_count:
                         continue
@@ -206,7 +219,7 @@ class MCTSTreeNode:
         cur: MCTSTreeNode = self
         while True:
             if len(cur.parent.children) > 1 or cur.parent.is_root:
-                cur.parent.children.remove(cur)  # TODO 性能
+                cur.parent.children.remove(cur)
                 cur = cur.parent
                 break
             else:

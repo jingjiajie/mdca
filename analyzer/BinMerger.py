@@ -4,7 +4,7 @@ from typing import cast, Iterable
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index, IndexLocations
+from analyzer.Index import Index, IndexLocations, IndexLocationType
 from analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
 from analyzer.commons import Value, calc_weight
 
@@ -197,14 +197,15 @@ class BinMerger:
     def expand(self, results: list[ResultPath]):
         final_results: list[ResultPath] = []
         index: Index = self.data_index
-        total_loc: IndexLocations = IndexLocations(index, np.ones(self.data_index.total_count, dtype=bool))
+        total_loc: IndexLocations = IndexLocations(np.ones(self.data_index.total_count, dtype=bool), self.data_index.total_count)
         total_error_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
         total_error_count: int = total_error_loc.count
         for result_path in results:
             expanded_result_items: list[ResultItem] = [m for m in result_path.items]
+            expanded_result_loc: IndexLocations = result_path.locations
             for item_pos in range(0, len(expanded_result_items)):
                 result_item: ResultItem = expanded_result_items[item_pos]
-                result_calc: CalculatedResult = ResultPath(expanded_result_items).calculate(index)
+                result_calc: CalculatedResult = ResultPath(expanded_result_items, expanded_result_loc).calculate(index)
                 col: str = result_item.column
                 val: Value | pd.Interval = result_item.value
                 if not self.column_binning[col] or (type(val) is not pd.Interval):
@@ -220,6 +221,7 @@ class BinMerger:
                     if expanded_result_items[i].column == col:
                         continue
                     other_items_loc = other_items_loc & expanded_result_items[i].locations
+                other_items_loc.cache(IndexLocationType.BOOL)
 
                 this_bin_pos: int = 0
                 while this_bin_pos < len(all_bins_asc):
@@ -243,9 +245,12 @@ class BinMerger:
                         next_loc: IndexLocations = index.get_locations(col, next_bin)
                         new_merged_bin_loc = _merged_bin_loc | next_loc
                         new_result_loc: IndexLocations = other_items_loc & new_merged_bin_loc
-                        new_result_err_loc: IndexLocations = new_result_loc & total_error_loc
                         new_result_count: int = new_result_loc.count
-                        new_error_count: int = new_result_err_loc.count
+                        new_error_count: int | None = new_result_loc.fast_intersect_count(total_error_loc)
+                        if new_error_count is None:
+                            new_result_err_loc: IndexLocations = new_result_loc & total_error_loc
+                            new_error_count = new_result_err_loc.count
+                        assert new_error_count is not None
                         new_error_rate: float = new_error_count / new_result_count
                         new_error_coverage: float = new_error_count / total_error_count
                         new_weight: float = calc_weight(len(expanded_result_items), new_error_coverage,
@@ -268,7 +273,9 @@ class BinMerger:
                 else:
                     merge_bin = this_bin
                 expanded_result_items[item_pos] = ResultItem(col, merge_bin, _merged_bin_loc)
-            final_results.append(ResultPath(expanded_result_items))
+                expanded_result_loc = other_items_loc & _merged_bin_loc
+                other_items_loc.clear_cache()
+            final_results.append(ResultPath(expanded_result_items, expanded_result_loc))
         return final_results
 
 

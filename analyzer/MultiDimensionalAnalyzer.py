@@ -1,6 +1,8 @@
+import gc
 import time
 
 import numpy as np
+import objgraph
 import pandas as pd
 
 from analyzer.BinMerger import BinMerger
@@ -41,9 +43,10 @@ class MultiDimensionalAnalyzer:
         self.data_index = data_index
 
     def run(self, mcts_rounds: int = 10000) -> list[ResultPath]:
-        tree: MCTSTree = MCTSTree(self.data_index, self.min_error_coverage)
+        tree: MCTSTree | None = MCTSTree(self.data_index, self.min_error_coverage)
         start_time: float = time.time()
         results: list[ResultPath] = tree.run(mcts_rounds)
+        del tree
         print("MCTS cost: %.2f seconds" % (time.time() - start_time))
 
         merger: BinMerger = BinMerger(self.data_index, self.column_types, self.column_binning)
