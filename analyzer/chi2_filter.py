@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from bitarray import bitarray
 from scipy import stats
 
 from analyzer.Index import Index, IndexLocations
@@ -38,7 +39,14 @@ def chi2_filter(results: list[ResultPath]) -> list[ResultPath]:
                 chi2, p, dof, expected_freq, actual_freq = _chi2_test_item_pair(item1, item2)
                 if p <= CHI2_THRESHOLD:
                     rel_vector[i] = rel_vector[j] = True
-        filtered_items: list[ResultItem] = [cur_result.items[i] for i in range(0, len(cur_result.items)) if rel_vector[i]]
-        if len(filtered_items) > 0:
-            filtered_results.append(ResultPath(filtered_items))
+        filtered_items: list[ResultItem] =\
+            [cur_result.items[i] for i in range(0, len(cur_result.items)) if rel_vector[i]]
+        if len(filtered_items) == 0:
+            continue
+        loc_total_bit: bitarray = bitarray(filtered_items[0].locations.index_length)
+        loc_total_bit.setall(1)
+        loc: IndexLocations = IndexLocations(loc_total_bit)
+        for item in filtered_items:
+            loc &= item.locations
+        filtered_results.append(ResultPath(filtered_items, loc))
     return filtered_results

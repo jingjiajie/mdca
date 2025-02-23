@@ -1,8 +1,9 @@
 from copy import copy
-from typing import cast, Iterable
+from typing import cast
 
 import numpy as np
 import pandas as pd
+from bitarray import bitarray
 
 from analyzer.Index import Index, IndexLocations, IndexLocationType
 from analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
@@ -25,7 +26,17 @@ class BinMerger:
                     pass
                 else:
                     filtered_items.append(item)
-            filtered_results.append(ResultPath(filtered_items))
+            if len(filtered_items) == len(result_path.items):
+                filtered_results.append(result_path)
+            elif len(filtered_items) == 0:
+                continue
+            else:
+                total_loc_bit: bitarray = bitarray(filtered_items[0].locations.index_length)
+                total_loc_bit.setall(1)
+                loc: IndexLocations = IndexLocations(total_loc_bit)
+                for item in filtered_items:
+                    loc &= item.locations
+                filtered_results.append(ResultPath(filtered_items, loc))
         return filtered_results
 
     def merge(self, results: list[ResultPath]):
@@ -99,7 +110,12 @@ class BinMerger:
                             new_loc: IndexLocations = item.locations | merge_item.locations
                             new_item = ResultItem(col, new_bin, new_loc)
                             merged_res_items.append(new_item)
-                    new_res: ResultPath = ResultPath(merged_res_items)
+                    total_loc_bit: bitarray = bitarray(merged_res_items[0].locations.index_length)
+                    total_loc_bit.setall(1)
+                    new_res_loc: IndexLocations = IndexLocations(total_loc_bit)
+                    for item in merged_res_items:
+                        new_res_loc &= item.locations
+                    new_res: ResultPath = ResultPath(merged_res_items, new_res_loc)
                     calc_new: CalculatedResult = new_res.calculate(self.data_index)
                     calc_cur: CalculatedResult = cur_res.calculate(self.data_index)
                     calc_compare: CalculatedResult = merge_res.calculate(self.data_index)
@@ -197,7 +213,6 @@ class BinMerger:
     def expand(self, results: list[ResultPath]):
         final_results: list[ResultPath] = []
         index: Index = self.data_index
-        total_loc: IndexLocations = IndexLocations(np.ones(self.data_index.total_count, dtype=bool), self.data_index.total_count)
         total_error_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
         total_error_count: int = total_error_loc.count
         for result_path in results:
@@ -216,12 +231,13 @@ class BinMerger:
                 # 提前计算缓存
                 all_bins_asc = sorted(all_bins, key=lambda interval: interval.left)
 
-                other_items_loc: IndexLocations = total_loc
+                total_loc_bit: bitarray = bitarray(expanded_result_items[0].locations.index_length)
+                total_loc_bit.setall(1)
+                other_items_loc: IndexLocations = IndexLocations(total_loc_bit)
                 for i in range(0, len(expanded_result_items)):
                     if expanded_result_items[i].column == col:
                         continue
-                    other_items_loc = other_items_loc & expanded_result_items[i].locations
-                other_items_loc.cache(IndexLocationType.BOOL)
+                    other_items_loc &= expanded_result_items[i].locations
 
                 this_bin_pos: int = 0
                 while this_bin_pos < len(all_bins_asc):
@@ -246,14 +262,11 @@ class BinMerger:
                         new_merged_bin_loc = _merged_bin_loc | next_loc
                         new_result_loc: IndexLocations = other_items_loc & new_merged_bin_loc
                         new_result_count: int = new_result_loc.count
-                        new_error_count: int | None = new_result_loc.fast_intersect_count(total_error_loc)
-                        if new_error_count is None:
-                            new_result_err_loc: IndexLocations = new_result_loc & total_error_loc
-                            new_error_count = new_result_err_loc.count
-                        assert new_error_count is not None
+                        new_result_err_loc: IndexLocations = new_result_loc & total_error_loc
+                        new_error_count: int = new_result_err_loc.count
                         new_error_rate: float = new_error_count / new_result_count
                         new_error_coverage: float = new_error_count / total_error_count
-                        new_weight: float = calc_weight(len(expanded_result_items), new_error_coverage,
+                        new_weight: float = calc_weight(1, new_error_coverage,
                                                         new_error_rate, index.total_error_rate)
                         if new_weight >= last_weight:
                             _merged_bin_loc = new_merged_bin_loc
@@ -274,7 +287,6 @@ class BinMerger:
                     merge_bin = this_bin
                 expanded_result_items[item_pos] = ResultItem(col, merge_bin, _merged_bin_loc)
                 expanded_result_loc = other_items_loc & _merged_bin_loc
-                other_items_loc.clear_cache()
             final_results.append(ResultPath(expanded_result_items, expanded_result_loc))
         return final_results
 

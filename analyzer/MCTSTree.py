@@ -2,6 +2,7 @@ import time
 
 import numpy as np
 import pandas as pd
+from bitarray import bitarray
 
 from analyzer.Index import Index, IndexLocations, IndexLocationType
 from analyzer.MCTSTreeNode import MCTSTreeNode
@@ -15,9 +16,9 @@ class MCTSTree:
         self.data_index: Index = data_index
         self.min_error_coverage: float = min_error_coverage
         self.min_error_count: int = int(data_index.total_error_count * self.min_error_coverage)
-        self._root: MCTSTreeNode = MCTSTreeNode(
-            self, None, None, None,
-            IndexLocations(np.ones(data_index.total_count, dtype=bool), data_index.total_count))
+        root_loc: bitarray = bitarray(data_index.total_count)
+        root_loc.setall(1)
+        self._root: MCTSTreeNode = MCTSTreeNode(self, None, None, None, IndexLocations(root_loc))
 
         self._column_values_satisfy_min_error_coverage: dict[str, dict[Value | pd.Interval, IndexLocations]] = {}
         for col in data_index.get_columns_after(None):
@@ -26,11 +27,7 @@ class MCTSTree:
                 loc: IndexLocations = data_index.get_locations(col, val)
                 if loc.count < self.min_error_count:
                     continue
-                loc.cache(IndexLocationType.BOOL)
-                loc.cache(IndexLocationType.ROW_NUMBER)
                 self._column_values_satisfy_min_error_coverage[col][val] = loc
-        data_index.total_error_locations.cache(IndexLocationType.BOOL)
-        data_index.total_error_locations.cache(IndexLocationType.ROW_NUMBER)
 
     def _get_values_satisfy_min_error_coverage_by_column(self, column: str) \
             -> dict[Value | pd.Interval, IndexLocations]:

@@ -2,7 +2,6 @@ import gc
 import time
 
 import numpy as np
-import objgraph
 import pandas as pd
 
 from analyzer.BinMerger import BinMerger

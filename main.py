@@ -3,7 +3,6 @@ import time
 from typing import Any
 
 import numpy as np
-import objgraph
 import pandas as pd
 
 from analyzer.Index import Index, IndexLocations

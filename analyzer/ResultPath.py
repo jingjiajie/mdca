@@ -33,7 +33,7 @@ class ResultPath:
 
     def __init__(self, items: list[ResultItem], locations: IndexLocations):
         self.items: list[ResultItem] = items
-        self.locations: IndexLocations | None = locations
+        self.locations: IndexLocations = locations
 
     def __str__(self):
         item_str_list: list[str] = []
