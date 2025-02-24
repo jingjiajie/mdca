@@ -2,7 +2,7 @@ import threading
 import time
 
 import numpy as np
-from bitarray import bitarray, util
+from bitarray import bitarray
 
 a: np.ndarray = np.packbits(np.random.choice([0, 1], size=5000000, p=[1 - 0.1, 0.1]))
 b: np.ndarray = np.packbits(np.random.choice([0, 1], size=5000000, p=[1 - 0.1, 0.1]))

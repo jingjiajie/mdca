@@ -77,30 +77,30 @@ class MCTSTreeNode:
         index: Index = self.tree.data_index
         children: list[MCTSTreeNode] = []
         columns_after: list[str] = self.tree.data_index.get_columns_after(self.column)
-        try_count = 0
-        try_error_count = 0
-        fast_predict_fail_count = 0
+        # try_count = 0
+        # try_error_count = 0
+        # fast_predict_fail_count = 0
         for col in columns_after:
             value_dict: dict[Value | pd.Interval, IndexLocations] =\
                 self.tree._get_values_satisfy_min_error_coverage_by_column(col)
             for val, val_loc in value_dict.items():
-                try_count += 1
+                # try_count += 1
                 fast_predict_intersect_count: bool | None = Index.fast_predict_bool_intersect_count(
                     [self.locations, val_loc, index.total_error_locations])
                 if (fast_predict_intersect_count is not None and
                         fast_predict_intersect_count < self.tree.min_error_count * 0.8):
-                    fast_predict_fail_count += 1
+                    # fast_predict_fail_count += 1
                     continue
                 child_loc: IndexLocations = self.locations & val_loc
                 child = MCTSTreeNode(self.tree, self, col, val, child_loc)
                 if child.count < self.tree.min_error_count:
                     continue
-                try_error_count += 1
+                # try_error_count += 1
                 if child.error_count < self.tree.min_error_count:
                     continue
                 children.append(child)
-        print("Tried count: %d, pred_fail: %d, try_error_count: %d, final_pass: %d" %
-              (try_count, fast_predict_fail_count, try_error_count, len(children)))
+        # print("Tried count: %d, pred_fail: %d, try_error_count: %d, final_pass: %d" %
+        #       (try_count, fast_predict_fail_count, try_error_count, len(children)))
         self.children = children
         if self.children is not None and len(self.children) == 0:
             cur = self

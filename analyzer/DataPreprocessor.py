@@ -4,10 +4,8 @@ import pandas as pd
 
 from analyzer.commons import Value
 
-BIN_NUMBER: int = 20
+BIN_NUMBER: int = 32  # avoid binning for date
 MIN_BIN_STEP: int = 1
-
-SORT_UNIQUE_VALUES_THRESHOLD = 20
 
 
 class ProcessResult:

@@ -102,10 +102,14 @@ if __name__ == '__main__':
     data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
                              data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
                              data_df['WEATHER_DELAY'].isna())
-    data_df.drop(['AIR_SYSTEM_DELAY', 'SECURITY_DELAY', 'AIRLINE_DELAY', 'LATE_AIRCRAFT_DELAY', 'WEATHER_DELAY'],
-                 axis=1, inplace=True)
+    # data_df.drop(['DEPARTURE_DELAY','ARRIVAL_DELAY','AIR_SYSTEM_DELAY', 'SECURITY_DELAY',
+    #               'AIRLINE_DELAY', 'LATE_AIRCRAFT_DELAY', 'WEATHER_DELAY'],
+    #              axis=1, inplace=True)
+
+    data_df = data_df[['YEAR','MONTH','DAY','DAY_OF_WEEK','AIRLINE','FLIGHT_NUMBER',
+                       'TAIL_NUMBER','ORIGIN_AIRPORT','DESTINATION_AIRPORT','DELAYED']]
     analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED',
-                                                                  target_value=1, min_error_coverage=0.02)
+                                                                  target_value=1, min_error_coverage=0.005)
 
     # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
     # data_df = data_df[data_df['term'] != 6]
@@ -117,16 +121,15 @@ if __name__ == '__main__':
     index: Index = analyzer.data_index
     print('\n========== Overall ============')
     print("total count: %d" % index.total_count)
-    print("error_rate: %d%%" % (index.total_error_rate * 100))
+    print("target rate baseline: %d%%" % (index.total_error_rate * 100))
 
     print('\n========== Results ============')
+    print('Target Cov(Count),\tTarget Rate(Baseline +N%),\tResult Combination')
     for r in results:
         calculated = r.calculate(analyzer.data_index)
         error_count = calculated.error_count
         error_rate: float = calculated.error_rate
         error_coverage: float = calculated.error_coverage
-        print(r, '\t\t',
-              # "error_count: %d" % error_count,
-              "error_coverage: %d%%" % (100 * error_coverage),
-              ", error_rate: %.2f(%+d%%)" % (error_rate, 100 * (error_rate - index.total_error_rate)),
-              ", weight: %.2f" % calculated.weight)
+        print("%5.2f%% (%6d),\t%5.2f%% (%+6.2f%%),\t\t\t%s" %
+              (100 * error_coverage, error_count, 100 * error_rate, 100 * (error_rate - index.total_error_rate), str(r))
+              )

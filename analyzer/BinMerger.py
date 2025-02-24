@@ -119,8 +119,8 @@ class BinMerger:
                     calc_new: CalculatedResult = new_res.calculate(self.data_index)
                     calc_cur: CalculatedResult = cur_res.calculate(self.data_index)
                     calc_compare: CalculatedResult = merge_res.calculate(self.data_index)
-                    # TODO and/or?
-                    if calc_new.weight >= calc_cur.weight or calc_new.weight >= calc_compare.weight:
+                    # if calc_new.weight >= min(calc_cur.weight, calc_compare.weight):
+                    if calc_new.weight >= 0:
                         merge_successful = True
                         group.remove(merge_res)
                         group.append(new_res)

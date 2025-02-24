@@ -1,9 +1,8 @@
 import numpy as np
-import pandas as pd
 from bitarray import bitarray
 from scipy import stats
 
-from analyzer.Index import Index, IndexLocations
+from analyzer.Index import IndexLocations
 from analyzer.ResultPath import ResultItem, ResultPath
 
 CHI2_THRESHOLD: float = 0.05
