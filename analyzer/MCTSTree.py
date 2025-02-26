@@ -44,12 +44,9 @@ class MCTSTree:
             if i != 0 and (i+1) % 1000 == 0:
                 print('MCTS round: %d' % (i+1))
             selected_leaf: MCTSTreeNode = self._root.select()
-            # print("Selected: ", selected_leaf.path())
             if selected_leaf.children is None:
-                # start = time.time()
                 selected_leaf.expand()
                 assert selected_leaf.children is not None
-                # print("Expand cost [%dms], children: %d" % ((time.time() - start)*1000, len(selected_leaf.children)))
                 for child in selected_leaf.children:
                     child.simulate()
                     child.back_propagate()
@@ -61,6 +58,7 @@ class MCTSTree:
         results: list[ResultPath] = self._select_results()
         return results
 
+    # TODO max_results动态适应
     def _select_results(self, max_results: int = 1000) -> list[ResultPath]:
         results: list[ResultPath] = []
         for i in range(0, max_results):
@@ -68,9 +66,9 @@ class MCTSTree:
             while cur.children is not None and len(cur.children) > 0:
                 max_q_child: MCTSTreeNode = cur.children[0]
                 for child in cur.children:
-                    if child.q_value > max_q_child.q_value:
+                    if child.max_weight > max_q_child.max_weight:
                         max_q_child = child
-                if max_q_child.q_value < cur.q_value:
+                if max_q_child.max_weight < cur.max_weight:
                     break
                 else:
                     cur = max_q_child

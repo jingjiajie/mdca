@@ -4,8 +4,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import polars as pl
 
-from analyzer.Index import Index, IndexLocations
+from analyzer.Index import Index
 from analyzer.MultiDimensionalAnalyzer import MultiDimensionalAnalyzer
 from analyzer.ResultPath import ResultPath
 
@@ -83,9 +84,37 @@ def mock_hmeq_data() -> pd.DataFrame:
     return data_df
 
 
+def explain_for_flights(res: ResultPath, target_rate: float, baseline_rate: float, target_coverage: float) -> str:
+    explain: str = ""
+    for item in res.items:
+        if item.column == 'MONTH':
+            explain += "%d月" % item.value
+        elif item.column == 'DAY':
+            explain += "%d日" % item.value
+        elif item.column == 'DAY_OF_WEEK':
+            explain += "星期%d" % item.value
+        elif item.column == 'AIRLINE':
+            explain += "%s航司" % item.value
+        elif item.column == 'FLIGHT_NUMBER':
+            explain += "航班序号在%s区间" % item.value
+        elif item.column == 'TAIL_NUMBER':
+            explain += "尾号为%s" % item.value
+        elif item.column == 'ORIGIN_AIRPORT':
+            explain += "始发机场%s" % item.value
+        elif item.column == 'DESTINATION_AIRPORT':
+            explain += "目的机场%s" % item.value
+
+    explain += '的延误率为%.2f%%，高于平均%.2f%%，占总体延误%.2f%%' % (
+        target_rate*100,
+        (target_rate - baseline_rate)*100,
+        target_coverage*100
+    )
+    return explain
+
 if __name__ == '__main__':
     random.seed(time.time())
 
+    start: float = time.time()
     # data_df: pd.DataFrame = mock_hmeq_data()
     #
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
@@ -97,7 +126,11 @@ if __name__ == '__main__':
     #                                                               target_value=1, is_sas_dataset=True,
     #                                                               min_error_coverage=0.05)
 
-    data_df: pd.DataFrame = pd.read_csv('data/flights/flights.csv')
+    print('Loading data...')
+    data_df = pl.read_csv('data/flights/flights.csv', encoding="utf8-lossy").to_pandas()
+
+    print('Load data cost: %.2f seconds' % (time.time() - start))
+    # data_df: pd.DataFrame = pd.read_csv('data/flights/flights.csv')
 
     data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
                              data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
@@ -119,17 +152,23 @@ if __name__ == '__main__':
 
     results: list[ResultPath] = analyzer.run()
     index: Index = analyzer.data_index
-    print('\n========== Overall ============')
-    print("total count: %d" % index.total_count)
-    print("target rate baseline: %d%%" % (index.total_error_rate * 100))
+    # print('\n========== Overall ============')
+    # print("total count: %d" % index.total_count)
+    # print("target rate baseline: %d%%" % (index.total_error_rate * 100))
 
-    print('\n========== Results ============')
-    print('Target Cov(Count),\tTarget Rate(Baseline +N%),\tResult Combination')
+    print("\nTotal time cost: %.2f seconds" % (time.time() - start))
+    print('========== Results ============')
+    print('Target Rate(Baseline +N%),\tTarget Cov(Count),\tResult Combination\t\t\t\t\t\t\t(解读)')
     for r in results:
         calculated = r.calculate(analyzer.data_index)
         error_count = calculated.error_count
         error_rate: float = calculated.error_rate
         error_coverage: float = calculated.error_coverage
-        print("%5.2f%% (%6d),\t%5.2f%% (%+6.2f%%),\t\t\t%s" %
-              (100 * error_coverage, error_count, 100 * error_rate, 100 * (error_rate - index.total_error_rate), str(r))
+        print("%5.2f%% (%+6.2f%%),\t\t%5.2f%% (%6d),\t\t%s\t\t\t(%s)" %
+              (100 * error_rate,
+               100 * (error_rate - index.total_error_rate),
+               100 * error_coverage,
+               error_count,
+               str(r),
+               explain_for_flights(r, error_rate, index.total_error_rate, error_coverage))
               )

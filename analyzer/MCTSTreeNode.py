@@ -16,19 +16,25 @@ class MCTSTreeNode:
 
     def __init__(self, tree: 'MCTSTree', parent: 'MCTSTreeNode | None', column: str | None, value: str | None,
                  locations: IndexLocations):
-        self._tree_weak_ref = weakref.ref(tree)
+        self._tree_ref = weakref.ref(tree)
         self.parent: MCTSTreeNode = parent
         self.children: list[MCTSTreeNode] | None = None
         self.column: str | None = column
         self.value: str | None = value
-        self.q_value: int = 0
+        self.max_weight: float = 0
+        self._self_weight: float = -1
         self.locations: IndexLocations = locations
         self.full_visited_flag: bool = False
         self._error_count: int = -1
+        self.depth: int
+        if parent is None:
+            self.depth = 0
+        else:
+            self.depth = parent.depth + 1
 
     @property
     def tree(self) -> 'MCTSTree':
-        return self._tree_weak_ref()
+        return self._tree_ref()
 
     @property
     def count(self) -> int:
@@ -52,7 +58,10 @@ class MCTSTreeNode:
 
     @property
     def weight(self) -> float:
-        return calc_weight(1, self.error_coverage, self.error_rate, self.tree.data_index.total_error_rate)
+        if self._self_weight == -1:
+            self._self_weight = calc_weight(
+                self.depth, self.error_coverage, self.error_rate, self.tree.data_index.total_error_rate)
+        return self._self_weight
 
     @property
     def is_root(self) -> bool:
@@ -64,11 +73,11 @@ class MCTSTreeNode:
         # TODO 性能优化
         non_full_visited_children = list(filter(lambda child: not child.full_visited_flag, self.children))
         if len(non_full_visited_children) == 0:
-            return self  # Should be root
+            return self
         weights: np.ndarray[np.float64] = np.ndarray(len(non_full_visited_children), dtype=np.float64)
         for i in range(len(non_full_visited_children)):
             child: MCTSTreeNode = non_full_visited_children[i]
-            weights[i] = child.q_value
+            weights[i] = child.max_weight
         weights_normalized: np.ndarray[np.float64] = weights/weights.sum()
         selected_child: MCTSTreeNode = np.random.choice(non_full_visited_children, size=1, p=weights_normalized)[0]
         return selected_child.select()
@@ -77,30 +86,24 @@ class MCTSTreeNode:
         index: Index = self.tree.data_index
         children: list[MCTSTreeNode] = []
         columns_after: list[str] = self.tree.data_index.get_columns_after(self.column)
-        # try_count = 0
-        # try_error_count = 0
-        # fast_predict_fail_count = 0
         for col in columns_after:
             value_dict: dict[Value | pd.Interval, IndexLocations] =\
                 self.tree._get_values_satisfy_min_error_coverage_by_column(col)
             for val, val_loc in value_dict.items():
-                # try_count += 1
                 fast_predict_intersect_count: bool | None = Index.fast_predict_bool_intersect_count(
                     [self.locations, val_loc, index.total_error_locations])
                 if (fast_predict_intersect_count is not None and
-                        fast_predict_intersect_count < self.tree.min_error_count * 0.8):
-                    # fast_predict_fail_count += 1
+                        fast_predict_intersect_count < self.tree.min_error_count * 0.5):
                     continue
                 child_loc: IndexLocations = self.locations & val_loc
                 child = MCTSTreeNode(self.tree, self, col, val, child_loc)
                 if child.count < self.tree.min_error_count:
                     continue
-                # try_error_count += 1
                 if child.error_count < self.tree.min_error_count:
                     continue
+                if child.weight == 0:
+                    continue
                 children.append(child)
-        # print("Tried count: %d, pred_fail: %d, try_error_count: %d, final_pass: %d" %
-        #       (try_count, fast_predict_fail_count, try_error_count, len(children)))
         self.children = children
         if self.children is not None and len(self.children) == 0:
             cur = self
@@ -112,14 +115,13 @@ class MCTSTreeNode:
                     break
 
     def simulate(self):
-        self.q_value = calc_weight(1, self.error_coverage, self.error_rate,
-                                   self.tree.data_index.total_error_rate)
+        self.max_weight = self.weight
 
     def back_propagate(self):
         cur: MCTSTreeNode = self.parent
         while cur is not None:
-            if cur.q_value < self.q_value:
-                cur.q_value = self.q_value
+            if cur.max_weight < self.max_weight:
+                cur.max_weight = self.max_weight
             cur = cur.parent
 
     def __str__(self):
@@ -150,11 +152,11 @@ class MCTSTreeNode:
 
         while cur is not None:
             if len(cur.children) == 0:
-                cur.q_value = cur.weight
+                cur.max_weight = cur.weight
             else:
-                max_q_child: MCTSTreeNode = cur.children[0]
+                max_weight_child: MCTSTreeNode = cur.children[0]
                 for child in cur.children:
-                    if child.q_value > max_q_child.q_value:
-                        max_q_child = child
-                cur.q_value = max_q_child.q_value
+                    if child.max_weight > max_weight_child.max_weight:
+                        max_weight_child = child
+                cur.max_weight = max(max_weight_child.max_weight, cur.weight)
             cur = cur.parent

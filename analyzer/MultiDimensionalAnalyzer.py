@@ -30,15 +30,31 @@ class MultiDimensionalAnalyzer:
         self.target_value: Value = target_value
         self.min_error_coverage: float = min_error_coverage
 
+        start: float = time.time()
+        print("Preprocessing data...")
         preprocessor: DataPreprocessor = DataPreprocessor()
         process_result: ProcessResult = preprocessor.process(data_df, target_column, target_value,
                                                              is_sas_dataset=is_sas_dataset)
+        print("Preprocess data cost: %.2f seconds" % (time.time() - start))
         self.column_types: dict[str, str] = process_result.column_types
         self.column_binning: dict[str, bool] = process_result.column_binning
         self.processed_data_df: pd.DataFrame = process_result.data_df
 
+        start = time.time()
+        print("Indexing data...")
+        target_count: int = np.count_nonzero(data_df[target_column] == target_value)
+        min_error_count: int = int(target_count * min_error_coverage)
+        ignore_columns: list[str] = []
+        for col_name in data_df.columns:
+            if self.column_binning[col_name]:
+                continue
+            value_counts: pd.Series = data_df[col_name].value_counts()
+            if np.count_nonzero(value_counts < min_error_count) == len(value_counts):
+                ignore_columns.append(col_name)
+        print("Ignored columns: ", ignore_columns)
         data_index: Index = Index(self.processed_data_df, process_result.column_types, target_column,
-                                  target_value)
+                                  target_value, ignore_columns)
+        print("Index data cost: %.2f seconds" % (time.time() - start))
         self.data_index = data_index
 
     def run(self, mcts_rounds: int = 10000) -> list[ResultPath]:

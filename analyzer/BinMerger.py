@@ -266,7 +266,7 @@ class BinMerger:
                         new_error_count: int = new_result_err_loc.count
                         new_error_rate: float = new_error_count / new_result_count
                         new_error_coverage: float = new_error_count / total_error_count
-                        new_weight: float = calc_weight(1, new_error_coverage,
+                        new_weight: float = calc_weight(len(expanded_result_items), new_error_coverage,
                                                         new_error_rate, index.total_error_rate)
                         if new_weight >= last_weight:
                             _merged_bin_loc = new_merged_bin_loc

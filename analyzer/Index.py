@@ -79,10 +79,12 @@ class IndexLocations:
 
 class Index:
 
-    def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value):
+    def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value,
+                 ignore_columns: list[str] | None = None):
         self.total_count = len(data_df)
+        self.ignore_columns: list[str] = ignore_columns or []
         self._index: dict[str, dict[Value, IndexLocations]]
-        self._init_index(data_df, column_types, target_column, target_value)
+        self._init_index(data_df, column_types, self.ignore_columns)
         self.target_column: str = target_column
         self.target_value: Value = target_value
         self.total_error_locations: IndexLocations = self.get_locations(target_column, target_value)
@@ -94,7 +96,7 @@ class Index:
         for col in data_df.columns:
             if col.startswith("Unnamed:"):
                 continue
-            elif col not in self._index:  # Not reach threshold
+            elif col not in self._index:
                 continue
             elif col == target_column:
                 continue
@@ -102,15 +104,18 @@ class Index:
                 filtered_columns.append(col)
         self.non_target_columns: list[str] = filtered_columns
 
-    def _init_index(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value):
+    def _init_index(self, data_df: pd.DataFrame, column_types: dict[str, str], ignore_columns: list[str]):
         col_indexes: dict[str, dict[Value, IndexLocations]] = {}  # ndarray of bool/np.uint32
-        print('Start indexing...')
         for col_name in data_df.columns:
+            if col_name in ignore_columns:
+                continue
             col_indexes[col_name] = {}
 
         data_array: np.ndarray = data_df.to_numpy(copy=False)
         for col_pos in range(0, len(data_df.columns)):
             col_name: str = data_df.columns[col_pos]
+            if col_name in ignore_columns:
+                continue
             is_float_col: bool = column_types[col_name] == 'float'
             unique_values: pd.Series = data_df[col_name].unique()
             print('Indexing %s, unique values: %d' % (col_name, len(unique_values)))
