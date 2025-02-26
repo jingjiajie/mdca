@@ -7,16 +7,23 @@ from analyzer.commons import Value, calc_weight
 
 class ResultItem:
 
-    def __init__(self, column: str, value: Value | pd.Interval, locations: IndexLocations):
+    def __init__(self, column: str, column_type: str, value: Value | pd.Interval, locations: IndexLocations):
         self.column: str = column
+        self.column_type: str = column_type
         self.value: Value | pd.Interval = value
         self.locations: IndexLocations = locations
 
     def __str__(self):
-        return f"{self.column}={self.value}"
+        return f"{self.column}={self._get_value_str()}"
 
     def __eq__(self, other: 'ResultItem'):
         return self.column == other.column and self.value == other.value
+
+    def _get_value_str(self) -> str:
+        if self.column_type == 'int':
+            if np.issubdtype(type(self.value), float):
+                return str(int(self.value))
+        return str(self.value)
 
 
 class CalculatedResult:

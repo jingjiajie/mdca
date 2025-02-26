@@ -120,55 +120,53 @@ if __name__ == '__main__':
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
     #                                                               target_value=1, is_sas_dataset=True,
     #                                                               min_error_coverage=0.05)
-
-    # data_df: pd.DataFrame = pd.read_csv('data/hmeq/hmeq_train.csv')
+    # data_df: pd.DataFrame = pl.read_csv('data/hmeq/hmeq_train.csv').to_pandas()
+    #
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
-    #                                                               target_value=1, is_sas_dataset=True,
-    #                                                               min_error_coverage=0.05)
+    #                                                               target_value=1, min_error_coverage=0.05)
 
-    print('Loading data...')
-    data_df = pl.read_csv('data/flights/flights.csv', encoding="utf8-lossy").to_pandas()
-
-    print('Load data cost: %.2f seconds' % (time.time() - start))
-    # data_df: pd.DataFrame = pd.read_csv('data/flights/flights.csv')
-
-    data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
-                             data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
-                             data_df['WEATHER_DELAY'].isna())
+    # data_df = pl.read_csv('data/flights/flights.csv', encoding="utf8-lossy").to_pandas()
+    #
+    # data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
+    #                          data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
+    #                          data_df['WEATHER_DELAY'].isna())
     # data_df.drop(['DEPARTURE_DELAY','ARRIVAL_DELAY','AIR_SYSTEM_DELAY', 'SECURITY_DELAY',
     #               'AIRLINE_DELAY', 'LATE_AIRCRAFT_DELAY', 'WEATHER_DELAY'],
     #              axis=1, inplace=True)
-
-    data_df = data_df[['YEAR','MONTH','DAY','DAY_OF_WEEK','AIRLINE','FLIGHT_NUMBER',
-                       'TAIL_NUMBER','ORIGIN_AIRPORT','DESTINATION_AIRPORT','DELAYED']]
-    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED',
-                                                                  target_value=1, min_error_coverage=0.005)
+    # # data_df = data_df[['YEAR','MONTH','DAY','DAY_OF_WEEK','AIRLINE','FLIGHT_NUMBER',
+    # #                    'TAIL_NUMBER','ORIGIN_AIRPORT','DESTINATION_AIRPORT','DELAYED']]
+    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED',
+    #                                                               target_value=1, min_error_coverage=0.01)
 
     # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
     # data_df = data_df[data_df['term'] != 6]
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
-    #                                                               target_value=1, is_sas_dataset=False,
-    #                                                               min_error_coverage=0.02)
+    #                                                               target_value=1, min_error_coverage=0.02)
+
+    print('Loading data...')
+    data_df = pl.read_csv('data/recruitment/recruitmentdataset-2022-1.3.csv', encoding="utf8-lossy").to_pandas()
+    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='decision',
+                                                                  target_value=False, min_error_coverage=0.01)
+    print('Load data cost: %.2f seconds' % (time.time() - start))
 
     results: list[ResultPath] = analyzer.run()
     index: Index = analyzer.data_index
-    # print('\n========== Overall ============')
-    # print("total count: %d" % index.total_count)
-    # print("target rate baseline: %d%%" % (index.total_error_rate * 100))
+    print('\n========== Overall ============')
+    print("total count: %d" % index.total_count)
+    print("target rate baseline: %d%%" % (index.total_error_rate * 100))
 
     print("\nTotal time cost: %.2f seconds" % (time.time() - start))
     print('========== Results ============')
-    print('Target Rate(Baseline +N%),\tTarget Cov(Count),\tResult Combination\t\t\t\t\t\t\t(解读)')
+    print('Target Rate(Baseline +N%),\tTarget Cov(Count),\tResult Combination')
     for r in results:
         calculated = r.calculate(analyzer.data_index)
         error_count = calculated.error_count
         error_rate: float = calculated.error_rate
         error_coverage: float = calculated.error_coverage
-        print("%5.2f%% (%+6.2f%%),\t\t%5.2f%% (%6d),\t\t%s\t\t\t(%s)" %
+        print("%5.2f%% (%+6.2f%%),\t\t%5.2f%% (%6d),\t\t%s" %
               (100 * error_rate,
                100 * (error_rate - index.total_error_rate),
                100 * error_coverage,
                error_count,
-               str(r),
-               explain_for_flights(r, error_rate, index.total_error_rate, error_coverage))
+               str(r))
               )

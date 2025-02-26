@@ -12,8 +12,9 @@ from analyzer.commons import Value
 
 class MCTSTree:
 
-    def __init__(self, data_index: Index, min_error_coverage: float):
+    def __init__(self, data_index: Index, column_types: dict[str, str], min_error_coverage: float):
         self.data_index: Index = data_index
+        self.column_types: dict[str, str] = column_types
         self._root: MCTSTreeNode
 
         self.min_error_coverage: float = min_error_coverage
@@ -79,7 +80,9 @@ class MCTSTree:
             result_items: list[ResultItem] = []
             cur = selected_node
             while cur.parent is not None:
-                result_items.append(ResultItem(cur.column, cur.value, self.data_index.get_locations(cur.column, cur.value)))
+                result_items.append(
+                    ResultItem(cur.column, self.column_types[cur.column], cur.value,
+                               self.data_index.get_locations(cur.column, cur.value)))
                 cur = cur.parent
             result_items.reverse()
             result_path: ResultPath = ResultPath(result_items, selected_node.locations)

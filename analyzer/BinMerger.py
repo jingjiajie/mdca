@@ -108,7 +108,7 @@ class BinMerger:
                                 right: int = max(this_bin.right, merge_bin.right)
                                 new_bin = pd.Interval(left, right, closed='left')
                             new_loc: IndexLocations = item.locations | merge_item.locations
-                            new_item = ResultItem(col, new_bin, new_loc)
+                            new_item = ResultItem(col, self.column_types[col], new_bin, new_loc)
                             merged_res_items.append(new_item)
                     total_loc_bit: bitarray = bitarray(merged_res_items[0].locations.index_length)
                     total_loc_bit.setall(1)
@@ -285,7 +285,7 @@ class BinMerger:
                     merge_bin = pd.Interval(lower_merge_bin.left, upper_merge_bin.right, closed='left')
                 else:
                     merge_bin = this_bin
-                expanded_result_items[item_pos] = ResultItem(col, merge_bin, _merged_bin_loc)
+                expanded_result_items[item_pos] = ResultItem(col, self.column_types[col], merge_bin, _merged_bin_loc)
                 expanded_result_loc = other_items_loc & _merged_bin_loc
             final_results.append(ResultPath(expanded_result_items, expanded_result_loc))
         return final_results

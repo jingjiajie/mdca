@@ -79,12 +79,12 @@ class IndexLocations:
 
 class Index:
 
-    def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], target_column: str, target_value: Value,
+    def __init__(self, data_df: pd.DataFrame, target_column: str, target_value: Value,
                  ignore_columns: list[str] | None = None):
         self.total_count = len(data_df)
         self.ignore_columns: list[str] = ignore_columns or []
         self._index: dict[str, dict[Value, IndexLocations]]
-        self._init_index(data_df, column_types, self.ignore_columns)
+        self._init_index(data_df, self.ignore_columns)
         self.target_column: str = target_column
         self.target_value: Value = target_value
         self.total_error_locations: IndexLocations = self.get_locations(target_column, target_value)
@@ -104,7 +104,7 @@ class Index:
                 filtered_columns.append(col)
         self.non_target_columns: list[str] = filtered_columns
 
-    def _init_index(self, data_df: pd.DataFrame, column_types: dict[str, str], ignore_columns: list[str]):
+    def _init_index(self, data_df: pd.DataFrame, ignore_columns: list[str]):
         col_indexes: dict[str, dict[Value, IndexLocations]] = {}  # ndarray of bool/np.uint32
         for col_name in data_df.columns:
             if col_name in ignore_columns:
@@ -116,34 +116,38 @@ class Index:
             col_name: str = data_df.columns[col_pos]
             if col_name in ignore_columns:
                 continue
-            is_float_col: bool = column_types[col_name] == 'float'
-            unique_values: pd.Series = data_df[col_name].unique()
+            unique_values: pd.Series = pd.Series(data_df[col_name].unique())
             print('Indexing %s, unique values: %d' % (col_name, len(unique_values)))
             if len(unique_values) <= 400:
                 for val in unique_values:
                     val: Value | pd.Interval
-                    if is_float_col and issubclass(type(val), float) and np.isnan(val):
-                        non_na_loc_bool: np.ndarray = data_df[col_name].isna().to_numpy(copy=False)
-                        non_na_loc_bit: bitarray = bitarray(buffer=np.packbits(non_na_loc_bool).data)
-                        non_na_loc_bit = non_na_loc_bit[:len(data_df)]
-                        col_indexes[col_name][val] = IndexLocations(non_na_loc_bit)
+                    if val is None or issubclass(type(val), float) and np.isnan(val):
+                        na_loc_bool: np.ndarray = data_df[col_name].isna().to_numpy(copy=False)
+                        na_loc_bit: bitarray = bitarray(buffer=np.packbits(na_loc_bool).data)
+                        na_loc_bit = na_loc_bit[:len(data_df)]
+                        if val is None:
+                            col_indexes[col_name][None] = IndexLocations(na_loc_bit)
+                        else:
+                            col_indexes[col_name][np.nan] = IndexLocations(na_loc_bit)
                     else:
                         val_loc_bool: np.ndarray = (data_df[col_name] == val).to_numpy(copy=False)
                         val_loc_bit: bitarray = bitarray(buffer=np.packbits(val_loc_bool).data)
                         val_loc_bit = val_loc_bit[:len(data_df)]
                         col_indexes[col_name][val] = IndexLocations(val_loc_bit)
             else:
-                is_float_col: bool = column_types[col_name] == 'float'
-                col_index = {}
+                col_index: dict[Value, list[int]] = {}
                 for val in data_df[col_name].unique():
-                    if is_float_col and issubclass(type(val), float) and np.isnan(val):
-                        val = np.nan
                     col_index[val] = []
+
                 for row_num in range(0, len(data_array)):
                     val: Value | pd.Interval = data_array[row_num][col_pos]
-                    if is_float_col and issubclass(type(val), float) and np.isnan(val):
-                        val = np.nan
-                    col_index[val].append(row_num)
+                    if val is None:
+                        col_index[None].append(row_num)
+                    elif issubclass(type(val), float) and np.isnan(val):
+                        col_index[np.nan].append(row_num)
+                    else:
+                        col_index[val].append(row_num)
+
                 for val, row_number_list in col_index.items():
                     val: Value | pd.Interval
                     row_number_list: list[int]

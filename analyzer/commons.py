@@ -1,7 +1,7 @@
 import sys
 from typing import TypeAlias
 
-Value: TypeAlias = str | float | int
+Value: TypeAlias = str | float | int | bool | None
 
 _ALPHA: float = 1
 _BETA: float = 1/2

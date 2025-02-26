@@ -21,16 +21,12 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process(self, data_df: pd.DataFrame, target_column: str, target_value: Value,
-                is_sas_dataset: bool = False) -> ProcessResult:
+    def process(self, data_df: pd.DataFrame, target_column: str, target_value: Value) -> ProcessResult:
 
         self._drop_single_value_column(data_df)
         data_df.reset_index(drop=True, inplace=True)
 
-        column_types: dict[str] = {}
-        for col in data_df.columns:
-            guess_type: str = self._determine_column_type(data_df, col)
-            column_types[col] = guess_type
+        column_types: dict[str, str] = self._infer_and_clean_data_inplace(data_df, data_df.columns)
 
         column_bin_mode: dict[str, bool] = {}
         for col_name in data_df.columns:
@@ -40,17 +36,6 @@ class DataPreprocessor:
                 column_bin_mode[col_name] = True
             else:
                 column_bin_mode[col_name] = False
-
-        if is_sas_dataset:
-            self._process_sas_missing_values_inplace(data_df, data_df.columns, column_types)
-
-        for col_pos in range(0, len(data_df.columns)):
-            col_name: str = data_df.columns[col_pos]
-            col_type: str = column_types[col_name]
-            if col_type == 'float':
-                data_df[col_name] = data_df[col_name].astype(float)
-            elif col_type == 'int':
-                data_df[col_name] = data_df[col_name].astype(int)
 
         self._binning_inplace(data_df, column_bin_mode)
         return ProcessResult(data_df, column_types, column_bin_mode)
@@ -62,52 +47,94 @@ class DataPreprocessor:
                 cols_to_drop.append(col)
         data_df.drop(cols_to_drop, axis=1, inplace=True)
 
-    def _determine_column_type(self, data_df: pd.DataFrame, column: str, sampling_count: int = 5000) -> str:
-        if 'int' in str(data_df[column].dtype):
-            return 'int'
-        if len(data_df) < sampling_count:
-            sampling_count = len(data_df)
-        sample_rows = np.random.randint(0, len(data_df), sampling_count)
-        series: pd.Series = data_df[column]
-        guess_type: str | None = None  # float, str
+    @staticmethod
+    def _try_convert_float(val: str) -> float | None:
+        try:
+            return float(val)
+        except ValueError:
+            return None
 
-        def str_is_float(s: str):
-            try:
-                float(s)
-                return True
-            except ValueError:
-                return False
-
-        for row in sample_rows:
-            val = series[row]
-            if type(val) is str:
-                val: str
-                if str_is_float(val) or val.strip() in ['.', '']:
-                    if guess_type is None:
-                        guess_type = 'float'
-                else:
-                    guess_type = 'str'
-                    break
-            elif np.isreal(val):
-                guess_type = 'float'
-        return guess_type
-
-    def _process_sas_missing_values_inplace(self, data_df: pd.DataFrame, columns: list[str], types: dict[str, str]):
+    def _infer_and_clean_data_inplace(self, data_df: pd.DataFrame, columns: list[str]) -> dict[str, str]:
+        column_types: dict[str, str] = {}
         for col_pos in range(0, len(columns)):
             col_name = columns[col_pos]
-            col_type = types[col_name]
-
-            if col_type == 'float' or col_type == 'bin':
-                def _clean_value(val):
-                    if type(val) is str or type(val) is np.str_:
-                        for c in val:
-                            if c != ' ' and c != '.':
-                                return val
-                        return float('nan')
+            if np.issubdtype(data_df[col_name].dtype, bool):
+                column_types[col_name] = 'bool'
+            elif np.issubdtype(data_df[col_name].dtype, int):
+                column_types[col_name] = 'int'
+            elif np.issubdtype(data_df[col_name].dtype, float):
+                unique_values: pd.Series = pd.Series(data_df[col_name].unique())
+                non_na_unique_values: pd.Series = unique_values[unique_values.notna()]
+                if np.all(np.floor(non_na_unique_values) == non_na_unique_values):
+                    column_types[col_name] = 'int'
+                    if len(non_na_unique_values) == len(unique_values):
+                        data_df[col_name] = data_df[col_name].astype(int)
+                else:
+                    column_types[col_name] = 'float'
+            elif data_df[col_name].dtype == object:
+                unique_values: pd.Series = pd.Series(data_df[col_name].unique())
+                non_na_unique_values: pd.Series = unique_values[unique_values.notna()]
+                # Check bool
+                is_bool: bool = True
+                for val in non_na_unique_values:
+                    val_str: str = str(val)
+                    val_str = val_str.strip().lower()
+                    if val_str not in ['true', 'false']:
+                        is_bool = False
+                        break
+                if is_bool:
+                    column_types[col_name] = 'bool'
+                    if len(unique_values) == len(non_na_unique_values):
+                        data_df[col_name] = data_df[col_name].astype(bool)
                     else:
-                        return val
-                data_df[col_name] = data_df[col_name].map(_clean_value)
-                data_df[col_name] = data_df[col_name].astype(float)
+                        replace_map: dict = {}
+                        for val in non_na_unique_values:
+                            if type(val) is bool:
+                                continue
+                            val_bool: bool = str(val).strip().lower() == 'true'
+                            replace_map[val] = val_bool
+                        replace_map[np.nan] = None
+                        data_df.replace({col_name: replace_map}, inplace=True)
+                    continue
+
+                # Check int/float
+                is_numeric: bool = True
+                is_int: bool = True
+                sas_missing_values: list[str] = []
+                for val in non_na_unique_values:
+                    val_str: str = str(val)
+                    float_val: float | None = self._try_convert_float(val_str)
+                    if float_val is not None:
+                        if int(float_val) != float_val:
+                            is_int = False
+                        continue
+                    elif val_str.strip() == '.':
+                        sas_missing_values.append(val_str)
+                        continue
+                    else:
+                        is_numeric = False
+                        break
+                if is_numeric:
+                    if len(sas_missing_values) > 0:
+                        replace_map: dict[str, float] = {}
+                        for item in sas_missing_values:
+                            replace_map[item] = np.nan
+                        data_df.replace({col_name: replace_map}, inplace=True)
+                    if is_int:
+                        column_types[col_name] = 'int'
+                        if np.all(pd.Series(data_df[col_name].unique()).notna()):
+                            data_df[col_name] = data_df[col_name].astype(int)
+                        else:
+                            data_df[col_name] = data_df[col_name].astype(float)
+                    else:
+                        column_types[col_name] = 'float'
+                        data_df[col_name] = data_df[col_name].astype(float)
+                    continue
+
+                # String type
+                column_types[col_name] = 'str'
+                data_df.replace({col_name: {np.nan: None}}, inplace=True)
+        return column_types
 
     def _binning_inplace(self, data_df: pd.DataFrame, column_bin_mode: dict[str, bool]):
         for col_name in [c for c in column_bin_mode.keys() if column_bin_mode[c]]:
