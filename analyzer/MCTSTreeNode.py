@@ -1,15 +1,24 @@
 import weakref
+from enum import Enum
 
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index, IndexLocations, IndexLocationType
-from analyzer.commons import calc_weight, Value
+from analyzer.Index import Index, IndexLocations
+from analyzer.ResultPath import ResultPath, ResultItem
+from analyzer.commons import calc_weight_fairness, Value, calc_weight_distribution
 
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
+
+
+class TreeNodeState(Enum):
+    DEFAULT_STATE: int = 0
+    FULL_VISITED_STATE: int = 1
+    PICKED_STATE: int = 2
+    FULL_PICKED_STATE: int = 3
 
 
 class MCTSTreeNode:
@@ -18,13 +27,13 @@ class MCTSTreeNode:
                  locations: IndexLocations):
         self._tree_ref = weakref.ref(tree)
         self.parent: MCTSTreeNode = parent
-        self.children: list[MCTSTreeNode] | None = None
+        self.children: dict[str, MCTSTreeNode] | None = None
         self.column: str | None = column
         self.value: str | None = value
         self.max_weight: float = 0
         self._self_weight: float = -1
         self.locations: IndexLocations = locations
-        self.full_visited_flag: bool = False
+        self.state: TreeNodeState = TreeNodeState.DEFAULT_STATE
         self._target_count: int = -1
         self.depth: int
         if parent is None:
@@ -50,7 +59,12 @@ class MCTSTreeNode:
     @property
     def target_coverage(self) -> float:
         index: Index = self.tree.data_index
-        return self.target_count / index.total_target_locations.count
+        return self.target_count / index.total_target_count
+
+    @property
+    def total_coverage(self) -> float:
+        index: Index = self.tree.data_index
+        return self.count / index.total_count
 
     @property
     def target_rate(self) -> float:
@@ -59,8 +73,18 @@ class MCTSTreeNode:
     @property
     def weight(self) -> float:
         if self._self_weight == -1:
-            self._self_weight = calc_weight(
-                self.depth, self.target_coverage, self.target_rate, self.tree.data_index.total_target_rate)
+            if self.tree.search_mode == 'fairness':
+                self._self_weight = calc_weight_fairness(
+                    self.depth, self.target_coverage, self.target_rate, self.tree.data_index.total_target_rate)
+            elif self.tree.search_mode == 'distribution':
+                col_values: dict[str, Value | pd.Interval] = {}
+                node: MCTSTreeNode = self
+                while node is not None:
+                    if node.column is not None:
+                        col_values[node.column] = node.value
+                    node = node.parent
+                baseline_coverage: float = self.tree.data_index.get_column_combination_coverage_baseline(col_values)
+                self._self_weight = calc_weight_distribution(self.depth, self.total_coverage, baseline_coverage)
         return self._self_weight
 
     @property
@@ -71,7 +95,8 @@ class MCTSTreeNode:
         if self.children is None:
             return self
         # TODO 性能优化
-        non_full_visited_children = list(filter(lambda child: not child.full_visited_flag, self.children))
+        non_full_visited_children: list[MCTSTreeNode] = (
+            list(filter(lambda child: child.state == TreeNodeState.DEFAULT_STATE, self.children.values())))
         if len(non_full_visited_children) == 0:
             return self
         weights: np.ndarray[np.float64] = np.ndarray(len(non_full_visited_children), dtype=np.float64)
@@ -84,32 +109,39 @@ class MCTSTreeNode:
 
     def expand(self):
         index: Index = self.tree.data_index
-        children: list[MCTSTreeNode] = []
+        children: dict[str, MCTSTreeNode] = {}
         columns_after: list[str] = self.tree.data_index.get_columns_after(self.column)
+        is_fairness: bool = self.tree.search_mode == 'fairness'
         for col in columns_after:
             value_dict: dict[Value | pd.Interval, IndexLocations] =\
-                self.tree._get_values_satisfy_min_target_coverage_by_column(col)
+                self.tree._get_candidate_values_by_column(col)
             for val, val_loc in value_dict.items():
-                fast_predict_intersect_count: bool | None = Index.fast_predict_bool_intersect_count(
-                    [self.locations, val_loc, index.total_target_locations])
+
+                fast_predict_intersect_count: bool | None
+                if is_fairness:
+                    fast_predict_intersect_count = Index.fast_predict_bool_intersect_count(
+                        [self.locations, val_loc, index.total_target_locations])
+                else:
+                    fast_predict_intersect_count = Index.fast_predict_bool_intersect_count(
+                        [self.locations, val_loc])
                 if (fast_predict_intersect_count is not None and
-                        fast_predict_intersect_count < self.tree.min_target_count * 0.5):
+                        fast_predict_intersect_count < self.tree.min_count * 0.5):
                     continue
                 child_loc: IndexLocations = self.locations & val_loc
                 child = MCTSTreeNode(self.tree, self, col, val, child_loc)
-                if child.count < self.tree.min_target_count:
+                if child.count < self.tree.min_count:
                     continue
-                if child.target_count < self.tree.min_target_count:
+                if is_fairness and child.target_count < self.tree.min_count:
                     continue
                 if child.weight == 0:
                     continue
-                children.append(child)
+                children[str(child)] = child
         self.children = children
         if self.children is not None and len(self.children) == 0:
             cur = self
             while cur is not None:
-                if all(map(lambda c: c.full_visited_flag, cur.children)):
-                    cur.full_visited_flag = True
+                if all(map(lambda c: c.state == TreeNodeState.FULL_VISITED_STATE, cur.children.values())):
+                    cur.state = TreeNodeState.FULL_VISITED_STATE
                     cur = cur.parent
                 else:
                     break
@@ -141,22 +173,29 @@ class MCTSTreeNode:
         return "[" + ", ".join(path) + "]"
 
     def pick(self):
-        cur: MCTSTreeNode = self
-        while True:
-            if len(cur.parent.children) > 1 or cur.parent.is_root:
-                cur.parent.children.remove(cur)
-                cur = cur.parent
-                break
-            else:
-                cur = cur.parent
+        if (len(self.children) == 0 or
+                all(map(lambda c: c.state == TreeNodeState.FULL_PICKED_STATE, self.children.values()))):
+            self.state = TreeNodeState.FULL_PICKED_STATE
+        else:
+            self.state = TreeNodeState.PICKED_STATE
 
+        cur: MCTSTreeNode = self
         while cur is not None:
-            if len(cur.children) == 0:
-                cur.max_weight = cur.weight
-            else:
-                max_weight_child: MCTSTreeNode = cur.children[0]
-                for child in cur.children:
-                    if child.max_weight > max_weight_child.max_weight:
-                        max_weight_child = child
-                cur.max_weight = max(max_weight_child.max_weight, cur.weight)
+            child_max_weight: float = 0
+            for child in cur.children.values():
+                if child.max_weight > child_max_weight:
+                    child_max_weight = child.max_weight
+            cur.max_weight = child_max_weight
             cur = cur.parent
+
+    def to_result(self) -> ResultPath:
+        result_items: list[ResultItem] = []
+        cur = self
+        while cur.parent is not None:
+            result_items.append(
+                ResultItem(cur.column, self.tree.column_info[cur.column].column_type, cur.value,
+                           self.tree.data_index.get_locations(cur.column, cur.value)))
+            cur = cur.parent
+        result_items.reverse()
+        result_path: ResultPath = ResultPath(result_items, self.locations, self.tree.search_mode)
+        return result_path

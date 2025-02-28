@@ -6,17 +6,17 @@ import numpy as np
 import pandas as pd
 from bitarray import bitarray
 
-from analyzer.Index import Index, IndexLocations, IndexLocationType
+from analyzer.Index import Index, IndexLocations
 from analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
-from analyzer.commons import Value, calc_weight
+from analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, ColumnInfo
 
 
 class BinMerger:
 
-    def __init__(self, data_index: Index, column_types: dict[str, str], column_binning: dict[str, bool]):
+    def __init__(self, data_index: Index, column_info: dict[str, ColumnInfo], search_mode: str):
         self.data_index = data_index
-        self.column_types: dict[str, str] = column_types
-        self.column_binning: dict[str, bool] = column_binning
+        self.column_info: dict[str, ColumnInfo] = column_info
+        self.search_mode: str = search_mode
 
     def filter(self, results: list[ResultPath]):
         start_time: float = time.time()
@@ -24,10 +24,12 @@ class BinMerger:
         for result_path in results:
             filtered_items: list[ResultItem] = []
             for item in result_path.items:
-                if item.locations.count == self.data_index.total_count:
-                    pass
-                else:
-                    filtered_items.append(item)
+                col_info: ColumnInfo = self.column_info[item.column]
+                if isinstance(item.value, pd.Interval):
+                    val_bin: pd.Interval = cast(pd.Interval, item.value)
+                    if val_bin.left == col_info.q01 and val_bin.right == col_info.q99:
+                        continue
+                filtered_items.append(item)
             if len(filtered_items) == len(result_path.items):
                 filtered_results.append(result_path)
             elif len(filtered_items) == 0:
@@ -38,7 +40,7 @@ class BinMerger:
                 loc: IndexLocations = IndexLocations(total_loc_bit)
                 for item in filtered_items:
                     loc &= item.locations
-                filtered_results.append(ResultPath(filtered_items, loc))
+                filtered_results.append(ResultPath(filtered_items, loc, self.search_mode))
         print("Filter cost: %.2f seconds" % (time.time() - start_time))
         return filtered_results
 
@@ -68,7 +70,7 @@ class BinMerger:
                         col: str = item.column
                         compare_item: ResultItem = compare_res[col]
                         # If it should not merge, break
-                        if not self.column_binning[col]:
+                        if not self.column_info[col].binning:
                             if not (item.value == compare_item.value or item.value is compare_item.value):
                                 should_merge = False
                                 break
@@ -95,9 +97,10 @@ class BinMerger:
                 merge_successful: bool = False
                 for merge_res in try_list:
                     merged_res_items: list[ResultItem] = []
+                    all_overlapped: bool = True
                     for item in cur_res.items:
                         col: str = item.column
-                        if not self.column_binning[col]:
+                        if not self.column_info[col].binning:
                             merged_res_items.append(item)
                         else:
                             merge_item: ResultItem = merge_res[col]
@@ -110,21 +113,27 @@ class BinMerger:
                                 merge_bin: pd.Interval = cast(pd.Interval, merge_item.value)
                                 left: int = min(this_bin.left, merge_bin.left)
                                 right: int = max(this_bin.right, merge_bin.right)
+                                overlapped: bool = max(this_bin.left, merge_bin.left) <= min(this_bin.right, merge_bin.right)
+                                if not overlapped:
+                                    all_overlapped = False
                                 new_bin = pd.Interval(left, right, closed='left')
                             new_loc: IndexLocations = item.locations | merge_item.locations
-                            new_item = ResultItem(col, self.column_types[col], new_bin, new_loc)
+                            new_item = ResultItem(col, self.column_info[col].column_type, new_bin, new_loc)
                             merged_res_items.append(new_item)
                     total_loc_bit: bitarray = bitarray(merged_res_items[0].locations.index_length)
                     total_loc_bit.setall(1)
                     new_res_loc: IndexLocations = IndexLocations(total_loc_bit)
                     for item in merged_res_items:
                         new_res_loc &= item.locations
-                    new_res: ResultPath = ResultPath(merged_res_items, new_res_loc)
+                    new_res: ResultPath = ResultPath(merged_res_items, new_res_loc, self.search_mode)
                     calc_new: CalculatedResult = new_res.calculate(self.data_index)
                     calc_cur: CalculatedResult = cur_res.calculate(self.data_index)
                     calc_compare: CalculatedResult = merge_res.calculate(self.data_index)
-                    # if calc_new.weight >= min(calc_cur.weight, calc_compare.weight):
-                    if calc_new.weight >= 0:
+                    if calc_new.weight >= min(calc_cur.weight, calc_compare.weight):
+                    # TODO 合并策略
+                    # if calc_new.target_rate >= min(calc_cur.target_rate, calc_compare.target_rate):
+                    # if all_overlapped:
+                    # if True:
                         merge_successful = True
                         group.remove(merge_res)
                         group.append(new_res)
@@ -133,79 +142,6 @@ class BinMerger:
                     can_not_merge_list.append(cur_res)
             group = can_not_merge_list
             result_groups[key] = group
-
-        # # Merge bins
-        # for key in result_groups.keys():
-        #     group: list[ResultPath] = result_groups[key]
-        #     can_not_merge_list: list[ResultPath] = []
-        #     while len(group) > 0:
-        #         cur_res: ResultPath = group.pop()
-        #         merge_res: ResultPath | None = None
-        #         # Iterate to compare
-        #         for i in range(0, len(group)):
-        #             compare_res: ResultPath = group[i]
-        #             should_merge: bool = True
-        #             for item in cur_res.items:
-        #                 col: str = item.column
-        #                 compare_item: ResultItem = compare_res[col]
-        #                 # If it should not merge, break
-        #                 if not self.column_binning[col]:
-        #                     if not (item.value == compare_item.value or item.value is compare_item.value):
-        #                         should_merge = False
-        #                         break
-        #                 else:  # Is bin column
-        #                     this_bin: pd.Interval = cast(pd.Interval, item.value)
-        #                     compare_bin: pd.Interval = cast(pd.Interval, compare_item.value)
-        #                     if this_bin.right < compare_bin.left or this_bin.left > compare_bin.right:
-        #                         should_merge = False
-        #                         break
-        #             if should_merge:
-        #                 merge_res = compare_res
-        #         if merge_res is None:
-        #             can_not_merge_list.append(cur_res)
-        #             continue
-        #         merged_res_items: list[ResultItem] = []
-        #         for item in cur_res.items:
-        #             col: str = item.column
-        #             if not self.column_binning[col]:
-        #                 merged_res_items.append(item)
-        #             else:
-        #                 merge_item: ResultItem = merge_res[col]
-        #                 this_bin: pd.Interval = cast(pd.Interval, item.value)
-        #                 merge_bin: pd.Interval = cast(pd.Interval, merge_item.value)
-        #                 left: int = min(this_bin.left, merge_bin.left)
-        #                 right: int = max(this_bin.right, merge_bin.right)
-        #                 new_bin: pd.Interval = pd.Interval(left, right, closed='left')
-        #                 new_loc: IndexLocations = item.locations | merge_item.locations
-        #                 new_item = ResultItem(col, new_bin, new_loc)
-        #                 merged_res_items.append(new_item)
-        #         new_res: ResultPath = ResultPath(merged_res_items)
-        #         group.remove(merge_res)
-        #         group.append(new_res)
-        #
-        #         # 证明Merge后新weight必然在两个result大小之间：
-        #         # new_weight = (cov1 + cov2) * new_rate
-        #         #   = (cov1 + cov2) * (err1 + err2)/(cnt1 + cnt2)
-        #         # 比较new_rate和rate1比大小，做差
-        #         # new_rate - rate1
-        #         #   = (err1 + err2)/(cnt1 + cnt2) - err1/cnt1
-        #         #   = cnt1(err1+err2)/cnt1(cnt1 + cnt2) - err1(cnt1+cnt2)/cnt1(cnt1+cnt2)
-        #         #   = [cnt1(err1+err2) - err1(cnt1+cnt2)] / cnt1(cnt1 + cnt2)
-        #         #   = (cnt1*err1 + cnt1*err2 - err1*cnt1 - err1*cnt2)/cnt1(cnt1 + cnt2)
-        #         #   = (err2*cnt1 - err1*cnt2)/cnt1(cnt1 + cnt2)
-        #         #   = cnt2*(err2/cnt2 - err1/cnt1)/(cnt1+cnt2)
-        #         #   = cnt2*(rate2 - rate1) / (cnt1+cnt2)
-        #         # 假设rate1 < rate2则>0，即new_rate > rate1，反之new_rate < rate1
-        #         # 故new_rate 介于 rate1和rate2中间
-        #
-        #         # new_weight = (cov1 + cov2) * (new_rate)
-        #         # 假设rate1 < rate2，则new_rate > rate1
-        #         #   (cov1 + cov2) > cov1
-        #         #   (cov1 + cov2) * new_rate > cov1*rate1
-        #         #   反之亦然，故new_weight必然在两个result大小之间：
-        #
-        #     group = can_not_merge_list
-        #     result_groups[key] = group
 
         # Collect results
         final_results: list[ResultPath] = []
@@ -219,22 +155,21 @@ class BinMerger:
         start_time: float = time.time()
         final_results: list[ResultPath] = []
         index: Index = self.data_index
-        total_target_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
-        total_target_count: int = total_target_loc.count
         for result_path in results:
             expanded_result_items: list[ResultItem] = [m for m in result_path.items]
             expanded_result_loc: IndexLocations = result_path.locations
             for item_pos in range(0, len(expanded_result_items)):
                 result_item: ResultItem = expanded_result_items[item_pos]
-                result_calc: CalculatedResult = ResultPath(expanded_result_items, expanded_result_loc).calculate(index)
+                result_calc: CalculatedResult =\
+                    ResultPath(expanded_result_items, expanded_result_loc, self.search_mode).calculate(index)
                 col: str = result_item.column
+                col_info: ColumnInfo = self.column_info[col]
                 val: Value | pd.Interval = result_item.value
-                if not self.column_binning[col] or (type(val) is not pd.Interval):
+                if not self.column_info[col].binning or (type(val) is not pd.Interval):
                     continue
                 this_bin: pd.Interval = cast(pd.Interval, val)
                 all_bins: list[pd.Interval] = \
                     [v for v in index.get_values_by_column(col) if type(v) is pd.Interval]
-                # 提前计算缓存
                 all_bins_asc = sorted(all_bins, key=lambda interval: interval.left)
 
                 total_loc_bit: bitarray = bitarray(expanded_result_items[0].locations.index_length)
@@ -264,19 +199,35 @@ class BinMerger:
                     step: int = 1 if direction == 'up' else -1
                     for bin_pos in range(start, end, step):
                         next_bin: pd.Interval = all_bins_asc[bin_pos]
+                        if next_bin.left < col_info.q01 or next_bin.right > col_info.q99:
+                            break
                         next_loc: IndexLocations = index.get_locations(col, next_bin)
                         new_merged_bin_loc = _merged_bin_loc | next_loc
                         new_result_loc: IndexLocations = other_items_loc & new_merged_bin_loc
                         new_result_count: int = new_result_loc.count
-                        new_result_err_loc: IndexLocations = new_result_loc & total_target_loc
-                        new_target_count: int = new_result_err_loc.count
-                        new_target_rate: float = new_target_count / new_result_count
-                        new_target_coverage: float = new_target_count / total_target_count
-                        new_weight: float = calc_weight(len(expanded_result_items), new_target_coverage,
-                                                        new_target_rate, index.total_target_rate)
+                        new_weight: float = -1
+                        if self.search_mode == 'fairness':
+                            total_target_loc: IndexLocations = index.get_locations(index.target_column,
+                                                                                   index.target_value)
+                            total_target_count: int = total_target_loc.count
+                            new_result_target_loc: IndexLocations = new_result_loc & total_target_loc
+                            new_target_count: int = new_result_target_loc.count
+                            new_target_rate: float = new_target_count / new_result_count
+                            new_target_coverage: float = new_target_count / total_target_count
+                            new_weight = calc_weight_fairness(len(expanded_result_items), new_target_coverage,
+                                                              new_target_rate, index.total_target_rate)
+                        elif self.search_mode == 'distribution':
+                            new_total_coverage: float = new_result_count / index.total_count
+                            expanded_column_values: dict[str, Value | pd.Interval] = {}
+                            for item in expanded_result_items:
+                                expanded_column_values[item.column] = item.value
+                            baseline_coverage: float = (
+                                index.get_column_combination_coverage_baseline(expanded_column_values))
+                            new_weight = calc_weight_distribution(
+                                len(expanded_result_items), new_total_coverage, baseline_coverage)
                         if new_weight >= last_weight:
                             _merged_bin_loc = new_merged_bin_loc
-                            last_weight = new_target_rate
+                            last_weight = new_weight
                             if direction == 'up':
                                 upper_bin_pos = bin_pos
                             else:
@@ -291,10 +242,9 @@ class BinMerger:
                     merge_bin = pd.Interval(lower_merge_bin.left, upper_merge_bin.right, closed='left')
                 else:
                     merge_bin = this_bin
-                expanded_result_items[item_pos] = ResultItem(col, self.column_types[col], merge_bin, _merged_bin_loc)
+                expanded_result_items[item_pos] = (
+                    ResultItem(col, self.column_info[col].column_type, merge_bin, _merged_bin_loc))
                 expanded_result_loc = other_items_loc & _merged_bin_loc
-            final_results.append(ResultPath(expanded_result_items, expanded_result_loc))
+            final_results.append(ResultPath(expanded_result_items, expanded_result_loc, self.search_mode))
         print("Expand cost: %.2f seconds" % (time.time() - start_time))
         return final_results
-
-

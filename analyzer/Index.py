@@ -1,22 +1,16 @@
 import threading
 import time
-from enum import Enum
-from typing import Iterable
+from typing import Iterable, cast
 
 import numpy as np
 import pandas as pd
 from bitarray import bitarray
 
-from analyzer.commons import Value
+from analyzer.commons import Value, ColumnInfo
 
 BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE: float = 0.01
 
 _thread_local: threading.local = threading.local()
-
-
-class IndexLocationType(Enum):
-    BOOL = 0
-    ROW_NUMBER = 1
 
 
 class IndexLocations:
@@ -80,28 +74,33 @@ class IndexLocations:
 
 class Index:
 
-    def __init__(self, data_df: pd.DataFrame, target_column: str, target_value: Value):
+    def __init__(self, data_df: pd.DataFrame, target_column: str | None, target_value: Value | None,
+                 column_info: dict[str, ColumnInfo]):
         self.total_count = len(data_df)
+        self.data_df = data_df
+        self.column_info: dict[str, ColumnInfo] = column_info
         self._index: dict[str, dict[Value, IndexLocations]]
         self._init_index(data_df)
-        self.target_column: str = target_column
-        self.target_value: Value = target_value
-        self.total_target_locations: IndexLocations = self.get_locations(target_column, target_value)
-        self.total_target_count: int = self.total_target_locations.count
-        self.total_target_rate = self.total_target_locations.count / self.total_count
+        self.target_column: str | None = target_column
+        self.target_value: Value | None = target_value
+        self.total_target_locations: IndexLocations | None = None
+        self.total_target_count: int | None = None
+        self.total_target_rate: float | None = None
+        if target_column is not None:
+            self.total_target_locations = self.get_locations(target_column, target_value)
+            self.total_target_count = self.total_target_locations.count
+            self.total_target_rate = self.total_target_locations.count / self.total_count
 
         filtered_columns: list[str] = []
-        col: str
         for col in data_df.columns:
-            if col.startswith("Unnamed:"):
-                continue
-            elif col not in self._index:
-                continue
-            elif col == target_column:
+            col: str
+            if col == target_column:
                 continue
             else:
                 filtered_columns.append(col)
         self.non_target_columns: list[str] = filtered_columns
+
+        self._baseline_coverage_cache: dict[str, float] = {}
 
     def _init_index(self, data_df: pd.DataFrame):
         print("Indexing data...")
@@ -169,6 +168,46 @@ class Index:
 
     def get_locations(self, column: str, value: Value | pd.Interval) -> IndexLocations:
         return self._index[column][value]
+
+    def get_column_combination_coverage_baseline(self, column_values: dict[str, Value | pd.Interval]) -> float:
+        if len(column_values) == 0:
+            return 1
+        categorical_columns: list[str] = []
+        continuous_columns: list[str] = []
+        for col in column_values.keys():
+            if self.column_info[col].binning:
+                continuous_columns.append(col)
+            else:
+                categorical_columns.append(col)
+        baseline_coverage: float = 1
+        if len(categorical_columns) > 0:
+            cache_key = ','.join(categorical_columns)
+            categorical_baseline_coverage: float
+            if cache_key in self._baseline_coverage_cache:
+                categorical_baseline_coverage = self._baseline_coverage_cache[cache_key]
+            else:
+                categorical_unique_combinations: pd.Series = self.data_df[categorical_columns].drop_duplicates()
+                categorical_baseline_coverage: float = 1 / len(categorical_unique_combinations)
+                self._baseline_coverage_cache[cache_key] = categorical_baseline_coverage
+            baseline_coverage *= categorical_baseline_coverage
+        if len(continuous_columns) > 0:
+            outer_hypercube_volume: float = 1
+            inner_hypercube_volume: float = 1
+            for col in continuous_columns:
+                val_bin: pd.Interval = cast(pd.Interval, column_values[col])
+                q01: float = self.column_info[col].q01
+                q99: float = self.column_info[col].q99
+                if val_bin.left < q01 or val_bin.right > q99:
+                    raise Exception('Column value must be between q01 and q99 (%.2f, %.2f), actual: (%.2f, %.2f)' %
+                                    (q01, q99, val_bin.left, val_bin.right))
+                length: float = q99 - q01
+                left_normalized: float = val_bin.left / length
+                right_normalized: float = val_bin.right / length
+                outer_hypercube_volume *= right_normalized
+                inner_hypercube_volume *= left_normalized
+            continuous_baseline_coverage: float = outer_hypercube_volume - inner_hypercube_volume
+            baseline_coverage *= continuous_baseline_coverage
+        return baseline_coverage
 
     @staticmethod
     def fast_predict_bool_intersect_count(loc_list: list['IndexLocations']) -> int | None:

@@ -4,7 +4,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from analyzer.commons import Value
+from analyzer.commons import Value, ColumnInfo
 
 BIN_NUMBER: int = 32  # avoid binning for date
 MIN_BIN_STEP: int = 1
@@ -12,10 +12,9 @@ MIN_BIN_STEP: int = 1
 
 class ProcessResult:
 
-    def __init__(self, data_df: pd.DataFrame, column_types: dict[str, str], column_binning: dict[str, bool]):
+    def __init__(self, data_df: pd.DataFrame, column_info: dict[str, ColumnInfo]):
         self.data_df: pd.DataFrame = data_df
-        self.column_types: dict[str, str] = column_types
-        self.column_binning: dict[str, bool] = column_binning
+        self.column_info: dict[str, ColumnInfo] = column_info
 
 
 class DataPreprocessor:
@@ -23,12 +22,16 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process(self, data_df: pd.DataFrame, target_column: str, target_value: Value, min_target_coverage: float)\
-            -> ProcessResult:
+    def process(self, data_df: pd.DataFrame, target_column: str | None,
+                target_value: Value | None, min_coverage: float, search_mode: str) -> ProcessResult:
         print("Preprocessing data...")
         start: float = time.time()
-        target_count: int = np.count_nonzero(data_df[target_column] == target_value)
-        min_target_count: int = int(target_count * min_target_coverage)
+        min_count: int
+        if search_mode == 'fairness':
+            target_count: int = np.count_nonzero(data_df[target_column] == target_value)
+            min_count = int(target_count * min_coverage)
+        elif search_mode == 'distribution':
+            min_count = int(len(data_df) * min_coverage)
         single_value_columns: list[str] = []
         for col_name in data_df.columns:
             unique_values: np.ndarray = data_df[col_name].unique()
@@ -38,22 +41,22 @@ class DataPreprocessor:
 
         column_types: dict[str, str] = self._infer_and_clean_data_inplace(data_df, data_df.columns)
 
-        column_bin_mode: dict[str, bool] = {}
+        column_binning: dict[str, bool] = {}
         for col_name in data_df.columns:
             col_type: str = column_types[col_name]
             if (col_name != target_column and (col_type == 'float' or col_type == 'int')
                     and len(data_df[col_name].unique()) > BIN_NUMBER):
-                column_bin_mode[col_name] = True
+                column_binning[col_name] = True
             else:
-                column_bin_mode[col_name] = False
+                column_binning[col_name] = False
 
         too_few_value_count_columns: list[str] = []
         for col_name in data_df.columns:
-            if column_bin_mode[col_name]:
+            if column_binning[col_name]:
                 continue
             value_counts: pd.Series = data_df[col_name].value_counts()
             if (len(value_counts) == len(data_df) or
-                    np.count_nonzero(value_counts < min_target_count) == len(value_counts)):
+                    np.count_nonzero(value_counts < min_count) == len(value_counts)):
                 too_few_value_count_columns.append(col_name)
         data_df.drop(too_few_value_count_columns, axis=1, inplace=True)
         print(" - Ignored columns:", '[' + ', '.join(single_value_columns + too_few_value_count_columns) + ']')
@@ -62,13 +65,34 @@ class DataPreprocessor:
         print(" - Binning columns: %s" %
               '[' +
               ', '.join(map(lambda item: item[0],
-                            filter(lambda item: item[1], column_bin_mode.items())))
+                            filter(lambda item: item[1], column_binning.items())))
               + ']'
               )
 
-        self._binning_inplace(data_df, column_bin_mode)
+        column_q00: dict[str, float] = {}
+        column_q01: dict[str, float] = {}
+        column_q99: dict[str, float] = {}
+        column_q100: dict[str, float] = {}
+        for col in data_df.columns:
+            if column_types[col] in ['int', 'float']:
+                [q00, q01, q99, q100] = data_df[col].quantile(q=[0, 0.01, 0.99, 1]).reset_index(drop=True)
+                column_q00[col] = q00
+                column_q01[col] = q01
+                column_q99[col] = q99
+                column_q100[col] = q100
+
+        column_info: dict[str, ColumnInfo] = {}
+        for col in data_df.columns:
+            info: ColumnInfo
+            if column_types[col] in ['int', 'float']:
+                info = ColumnInfo(col, column_types[col], column_binning[col], column_q00[col],
+                                  column_q01[col], column_q99[col], column_q100[col])
+            else:
+                info = ColumnInfo(col, column_types[col], column_binning[col], None, None, None, None)
+            column_info[col] = info
+        self._binning_inplace(data_df, column_info)
         print("Preprocess data cost: %.2f seconds" % (time.time() - start))
-        return ProcessResult(data_df, column_types, column_bin_mode)
+        return ProcessResult(data_df, column_info)
 
     @staticmethod
     def _try_convert_float(val: str) -> float | None:
@@ -96,7 +120,15 @@ class DataPreprocessor:
                     column_types[col_name] = 'float'
             elif data_df[col_name].dtype == object:
                 unique_values: pd.Series = pd.Series(data_df[col_name].unique())
-                non_na_unique_values: pd.Series = unique_values[unique_values.notna()]
+                non_na_unique_values: list = []
+                for val in unique_values:
+                    if np.issubdtype(type(val), float) and np.isnan(val):
+                        continue
+                    elif np.issubdtype(type(val), str) and val.strip().lower() == 'nan':
+                        continue
+                    else:
+                        non_na_unique_values.append(val)
+
                 # Check bool
                 is_bool: bool = True
                 for val in non_na_unique_values:
@@ -159,16 +191,17 @@ class DataPreprocessor:
                 data_df.replace({col_name: {np.nan: None}}, inplace=True)
         return column_types
 
-    def _binning_inplace(self, data_df: pd.DataFrame, column_bin_mode: dict[str, bool]):
-        for col_name in [c for c in column_bin_mode.keys() if column_bin_mode[c]]:
-            [q00, q01, q99, q100] = data_df[col_name].quantile(q=[0, 0.01, 0.99, 1]).reset_index(drop=True)
-            q00_int: int = math.floor(q00)
-            q01_int: int = math.floor(q01)
-            q99_int: int = math.ceil(q99)
-            q100_int: int = math.ceil(q100)
-            if q100 == q100_int:
+    def _binning_inplace(self, data_df: pd.DataFrame, column_info: dict[str, ColumnInfo]):
+        for col_name, col_info in column_info.items():
+            if not col_info.binning:
+                continue
+            q00_int: int = math.floor(col_info.q00)
+            q01_int: int = math.floor(col_info.q01)
+            q99_int: int = math.ceil(col_info.q99)
+            q100_int: int = math.ceil(col_info.q100)
+            if col_info.q100 == q100_int:
                 q100_int += 1
-            step: float = (q99 - q01) / (BIN_NUMBER - 2)
+            step: float = (col_info.q99 - col_info.q01) / (BIN_NUMBER - 2)
             if step < MIN_BIN_STEP:
                 step = MIN_BIN_STEP
             bins: list[int] = []
