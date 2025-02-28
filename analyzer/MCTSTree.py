@@ -12,38 +12,39 @@ from analyzer.commons import Value
 
 class MCTSTree:
 
-    def __init__(self, data_index: Index, column_types: dict[str, str], min_error_coverage: float):
+    def __init__(self, data_index: Index, column_types: dict[str, str], min_target_coverage: float):
         self.data_index: Index = data_index
         self.column_types: dict[str, str] = column_types
         self._root: MCTSTreeNode
 
-        self.min_error_coverage: float = min_error_coverage
-        self.min_error_count: int = int(data_index.total_error_count * self.min_error_coverage)
-        self._column_values_satisfy_min_error_coverage: dict[str, dict[Value | pd.Interval, IndexLocations]] = {}
+        self.min_target_coverage: float = min_target_coverage
+        self.min_target_count: int = int(data_index.total_target_count * self.min_target_coverage)
+        self._column_values_satisfy_min_target_coverage: dict[str, dict[Value | pd.Interval, IndexLocations]] = {}
         for col in data_index.get_columns_after(None):
-            self._column_values_satisfy_min_error_coverage[col] = {}
+            self._column_values_satisfy_min_target_coverage[col] = {}
             for val in data_index.get_values_by_column(col):
                 loc: IndexLocations = data_index.get_locations(col, val)
-                if loc.count < self.min_error_count:
+                if loc.count < self.min_target_count:
                     continue
-                self._column_values_satisfy_min_error_coverage[col][val] = loc
+                self._column_values_satisfy_min_target_coverage[col][val] = loc
 
     def _reset(self):
         root_loc: bitarray = bitarray(self.data_index.total_count)
         root_loc.setall(1)
         self._root = MCTSTreeNode(self, None, None, None, IndexLocations(root_loc))
 
-    def _get_values_satisfy_min_error_coverage_by_column(self, column: str) \
+    def _get_values_satisfy_min_target_coverage_by_column(self, column: str) \
             -> dict[Value | pd.Interval, IndexLocations]:
-        return self._column_values_satisfy_min_error_coverage[column]
+        return self._column_values_satisfy_min_target_coverage[column]
 
     def run(self, times: int):
         print('MCTS start...')
+        start_time: float = time.time()
         self._reset()
         i: int = 0
         for i in range(0, times):
             if i != 0 and (i+1) % 1000 == 0:
-                print('MCTS round: %d' % (i+1))
+                print(' - MCTS round: %d' % (i+1))
             selected_leaf: MCTSTreeNode = self._root.select()
             if selected_leaf.children is None:
                 selected_leaf.expand()
@@ -55,7 +56,7 @@ class MCTSTree:
                 break
             else:
                 raise Exception('Unexpected error: MCTS selection of ' + str(selected_leaf))
-        print("MCTS ended, rounds: %d" % i)
+        print("MCTS ended, rounds: %d, cost: %.2f seconds" % (i, time.time() - start_time))
         results: list[ResultPath] = self._select_results()
         return results
 

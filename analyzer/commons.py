@@ -9,10 +9,10 @@ _GAMMA: float = 3/2
 # _EPSILON: float = 0.001
 
 
-def calc_weight(dimensions: int, error_coverage: float, error_rate: float, total_error_rate: float) -> float:
-    # if error_rate < total_error_rate:
-    #     return dimensions ** _ALPHA * error_coverage ** _BETA * (error_rate*_EPSILON) ** _GAMMA
+def calc_weight(dimensions: int, target_coverage: float, target_rate: float, total_target_rate: float) -> float:
+    # if target_rate < total_target_rate:
+    #     return dimensions ** _ALPHA * target_coverage ** _BETA * (target_rate*_EPSILON) ** _GAMMA
     # else:
-    #     return dimensions ** _ALPHA * error_coverage ** _BETA * (error_rate - total_error_rate + _EPSILON) ** _GAMMA
+    #     return dimensions ** _ALPHA * target_coverage ** _BETA * (target_rate - total_target_rate + _EPSILON) ** _GAMMA
 
-    return _ALPHA**-(dimensions-1) * error_coverage**_BETA * max(error_rate - total_error_rate, 0)**_GAMMA
+    return _ALPHA**-(dimensions-1) * target_coverage**_BETA * max(target_rate - total_target_rate, 0)**_GAMMA

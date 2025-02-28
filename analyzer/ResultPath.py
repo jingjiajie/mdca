@@ -28,11 +28,11 @@ class ResultItem:
 
 class CalculatedResult:
 
-    def __init__(self, count: int, error_count: int, error_coverage: float, error_rate: float, weight: float):
+    def __init__(self, count: int, target_count: int, target_coverage: float, target_rate: float, weight: float):
         self.count: int = count
-        self.error_count: int = error_count
-        self.error_rate: float = error_rate
-        self.error_coverage: float = error_coverage
+        self.target_count: int = target_count
+        self.target_rate: float = target_rate
+        self.target_coverage: float = target_coverage
         self.weight: float = weight
 
 
@@ -56,14 +56,14 @@ class ResultPath:
 
     def calculate(self, index: Index) -> CalculatedResult:
         result_items: list[ResultItem] = self.items
-        total_error_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
-        total_error_count: int = total_error_loc.count
+        total_target_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
+        total_target_count: int = total_target_loc.count
         if len(result_items) == 0:
-            return CalculatedResult(index.total_count, total_error_count,  1, index.total_error_rate,
-                                    calc_weight(0, 1, index.total_error_rate, index.total_error_rate))
+            return CalculatedResult(index.total_count, total_target_count,  1, index.total_target_rate,
+                                    calc_weight(0, 1, index.total_target_rate, index.total_target_rate))
         count: int = self.locations.count
-        error_count: int = (self.locations & total_error_loc).count
-        error_rate: float = error_count / count
-        error_coverage: float = error_count / total_error_count
-        return CalculatedResult(count, error_count, error_coverage, error_rate,
-                                calc_weight(len(self.items), error_coverage, error_rate, index.total_error_rate))
+        target_count: int = (self.locations & total_target_loc).count
+        target_rate: float = target_count / count
+        target_coverage: float = target_count / total_target_count
+        return CalculatedResult(count, target_count, target_coverage, target_rate,
+                                calc_weight(len(self.items), target_coverage, target_rate, index.total_target_rate))

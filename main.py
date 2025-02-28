@@ -119,11 +119,11 @@ if __name__ == '__main__':
     #
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
     #                                                               target_value=1, is_sas_dataset=True,
-    #                                                               min_error_coverage=0.05)
+    #                                                               min_target_coverage=0.05)
     # data_df: pd.DataFrame = pl.read_csv('data/hmeq/hmeq_train.csv').to_pandas()
     #
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD',
-    #                                                               target_value=1, min_error_coverage=0.05)
+    #                                                               target_value=1, min_target_coverage=0.05)
 
     # data_df = pl.read_csv('data/flights/flights.csv', encoding="utf8-lossy").to_pandas()
     #
@@ -136,37 +136,37 @@ if __name__ == '__main__':
     # # data_df = data_df[['YEAR','MONTH','DAY','DAY_OF_WEEK','AIRLINE','FLIGHT_NUMBER',
     # #                    'TAIL_NUMBER','ORIGIN_AIRPORT','DESTINATION_AIRPORT','DELAYED']]
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED',
-    #                                                               target_value=1, min_error_coverage=0.01)
+    #                                                               target_value=1, min_target_coverage=0.01)
 
     # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
     # data_df = data_df[data_df['term'] != 6]
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError',
-    #                                                               target_value=1, min_error_coverage=0.02)
+    #                                                               target_value=1, min_target_coverage=0.02)
 
     print('Loading data...')
     data_df = pl.read_csv('data/recruitment/recruitmentdataset-2022-1.3.csv', encoding="utf8-lossy").to_pandas()
-    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='decision',
-                                                                  target_value=False, min_error_coverage=0.01)
     print('Load data cost: %.2f seconds' % (time.time() - start))
+    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='decision',
+                                                                  target_value=1, min_target_coverage=0.01)
 
     results: list[ResultPath] = analyzer.run()
     index: Index = analyzer.data_index
+    print("\nTotal time cost: %.2f seconds" % (time.time() - start))
     print('\n========== Overall ============')
     print("total count: %d" % index.total_count)
-    print("target rate baseline: %d%%" % (index.total_error_rate * 100))
+    print("target rate baseline: %d%%" % (index.total_target_rate * 100))
 
-    print("\nTotal time cost: %.2f seconds" % (time.time() - start))
-    print('========== Results ============')
+    print('\n========== Results ============')
     print('Target Rate(Baseline +N%),\tTarget Cov(Count),\tResult Combination')
     for r in results:
         calculated = r.calculate(analyzer.data_index)
-        error_count = calculated.error_count
-        error_rate: float = calculated.error_rate
-        error_coverage: float = calculated.error_coverage
+        target_count = calculated.target_count
+        target_rate: float = calculated.target_rate
+        target_coverage: float = calculated.target_coverage
         print("%5.2f%% (%+6.2f%%),\t\t%5.2f%% (%6d),\t\t%s" %
-              (100 * error_rate,
-               100 * (error_rate - index.total_error_rate),
-               100 * error_coverage,
-               error_count,
+              (100 * target_rate,
+               100 * (target_rate - index.total_target_rate),
+               100 * target_coverage,
+               target_count,
                str(r))
               )

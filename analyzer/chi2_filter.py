@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 from bitarray import bitarray
 from scipy import stats
@@ -9,6 +11,7 @@ CHI2_THRESHOLD: float = 0.05
 
 
 def chi2_filter(results: list[ResultPath]) -> list[ResultPath]:
+    start_time: float = time.time()
 
     def _chi2_test_item_pair(item1: ResultItem, item2: ResultItem):
         loc1: IndexLocations = item1.locations
@@ -48,4 +51,5 @@ def chi2_filter(results: list[ResultPath]) -> list[ResultPath]:
         for item in filtered_items:
             loc &= item.locations
         filtered_results.append(ResultPath(filtered_items, loc))
+    print("Chi2 test cost: %.2f seconds" % (time.time() - start_time))
     return filtered_results

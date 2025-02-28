@@ -1,4 +1,6 @@
 import math
+import time
+
 import numpy as np
 import pandas as pd
 
@@ -21,10 +23,18 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process(self, data_df: pd.DataFrame, target_column: str, target_value: Value) -> ProcessResult:
-
-        self._drop_single_value_column(data_df)
-        data_df.reset_index(drop=True, inplace=True)
+    def process(self, data_df: pd.DataFrame, target_column: str, target_value: Value, min_target_coverage: float)\
+            -> ProcessResult:
+        print("Preprocessing data...")
+        start: float = time.time()
+        target_count: int = np.count_nonzero(data_df[target_column] == target_value)
+        min_target_count: int = int(target_count * min_target_coverage)
+        single_value_columns: list[str] = []
+        for col_name in data_df.columns:
+            unique_values: np.ndarray = data_df[col_name].unique()
+            if len(unique_values) == 1:
+                single_value_columns.append(col_name)
+        data_df.drop(single_value_columns, axis=1, inplace=True)
 
         column_types: dict[str, str] = self._infer_and_clean_data_inplace(data_df, data_df.columns)
 
@@ -37,15 +47,28 @@ class DataPreprocessor:
             else:
                 column_bin_mode[col_name] = False
 
-        self._binning_inplace(data_df, column_bin_mode)
-        return ProcessResult(data_df, column_types, column_bin_mode)
+        too_few_value_count_columns: list[str] = []
+        for col_name in data_df.columns:
+            if column_bin_mode[col_name]:
+                continue
+            value_counts: pd.Series = data_df[col_name].value_counts()
+            if (len(value_counts) == len(data_df) or
+                    np.count_nonzero(value_counts < min_target_count) == len(value_counts)):
+                too_few_value_count_columns.append(col_name)
+        data_df.drop(too_few_value_count_columns, axis=1, inplace=True)
+        print(" - Ignored columns:", '[' + ', '.join(single_value_columns + too_few_value_count_columns) + ']')
+        print(" - Inferred column types: %s" %
+              ", ".join(map(lambda item: "(%s: %s)" % (item[0], item[1]), column_types.items())))
+        print(" - Binning columns: %s" %
+              '[' +
+              ', '.join(map(lambda item: item[0],
+                            filter(lambda item: item[1], column_bin_mode.items())))
+              + ']'
+              )
 
-    def _drop_single_value_column(self, data_df: pd.DataFrame):
-        cols_to_drop: list[str] = []
-        for col in data_df.columns:
-            if len(data_df[col].unique()) == 1:
-                cols_to_drop.append(col)
-        data_df.drop(cols_to_drop, axis=1, inplace=True)
+        self._binning_inplace(data_df, column_bin_mode)
+        print("Preprocess data cost: %.2f seconds" % (time.time() - start))
+        return ProcessResult(data_df, column_types, column_bin_mode)
 
     @staticmethod
     def _try_convert_float(val: str) -> float | None:

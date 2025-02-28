@@ -1,4 +1,5 @@
 import threading
+import time
 from enum import Enum
 from typing import Iterable
 
@@ -79,17 +80,15 @@ class IndexLocations:
 
 class Index:
 
-    def __init__(self, data_df: pd.DataFrame, target_column: str, target_value: Value,
-                 ignore_columns: list[str] | None = None):
+    def __init__(self, data_df: pd.DataFrame, target_column: str, target_value: Value):
         self.total_count = len(data_df)
-        self.ignore_columns: list[str] = ignore_columns or []
         self._index: dict[str, dict[Value, IndexLocations]]
-        self._init_index(data_df, self.ignore_columns)
+        self._init_index(data_df)
         self.target_column: str = target_column
         self.target_value: Value = target_value
-        self.total_error_locations: IndexLocations = self.get_locations(target_column, target_value)
-        self.total_error_count: int = self.total_error_locations.count
-        self.total_error_rate = self.total_error_locations.count / self.total_count
+        self.total_target_locations: IndexLocations = self.get_locations(target_column, target_value)
+        self.total_target_count: int = self.total_target_locations.count
+        self.total_target_rate = self.total_target_locations.count / self.total_count
 
         filtered_columns: list[str] = []
         col: str
@@ -104,20 +103,18 @@ class Index:
                 filtered_columns.append(col)
         self.non_target_columns: list[str] = filtered_columns
 
-    def _init_index(self, data_df: pd.DataFrame, ignore_columns: list[str]):
+    def _init_index(self, data_df: pd.DataFrame):
+        print("Indexing data...")
+        start = time.time()
         col_indexes: dict[str, dict[Value, IndexLocations]] = {}  # ndarray of bool/np.uint32
         for col_name in data_df.columns:
-            if col_name in ignore_columns:
-                continue
             col_indexes[col_name] = {}
 
         data_array: np.ndarray = data_df.to_numpy(copy=False)
         for col_pos in range(0, len(data_df.columns)):
             col_name: str = data_df.columns[col_pos]
-            if col_name in ignore_columns:
-                continue
             unique_values: pd.Series = pd.Series(data_df[col_name].unique())
-            print('Indexing %s, unique values: %d' % (col_name, len(unique_values)))
+            print(' - Indexing %s, unique values: %d' % (col_name, len(unique_values)))
             if len(unique_values) <= 400:
                 for val in unique_values:
                     val: Value | pd.Interval
@@ -154,6 +151,7 @@ class Index:
                     loc_bit: bitarray = bitarray(len(data_df))
                     loc_bit[row_number_list] = 1
                     col_indexes[col_name][val] = IndexLocations(loc_bit)
+        print("Index data cost: %.2f seconds" % (time.time() - start))
         self._index = col_indexes
 
     def get_columns_after(self, column: str | None):

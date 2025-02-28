@@ -1,3 +1,4 @@
+import time
 from copy import copy
 from typing import cast
 
@@ -18,6 +19,7 @@ class BinMerger:
         self.column_binning: dict[str, bool] = column_binning
 
     def filter(self, results: list[ResultPath]):
+        start_time: float = time.time()
         filtered_results: list[ResultPath] = []
         for result_path in results:
             filtered_items: list[ResultItem] = []
@@ -37,9 +39,11 @@ class BinMerger:
                 for item in filtered_items:
                     loc &= item.locations
                 filtered_results.append(ResultPath(filtered_items, loc))
+        print("Filter cost: %.2f seconds" % (time.time() - start_time))
         return filtered_results
 
     def merge(self, results: list[ResultPath]):
+        start_time: float = time.time()
         result_groups: dict[str, list[ResultPath]] = {}
         # Grouping by column
         for result_path in results:
@@ -208,13 +212,15 @@ class BinMerger:
         for key in result_groups.keys():
             group: list[ResultPath] = result_groups[key]
             final_results += group
+        print("Merge cost: %.2f seconds" % (time.time() - start_time))
         return final_results
 
     def expand(self, results: list[ResultPath]):
+        start_time: float = time.time()
         final_results: list[ResultPath] = []
         index: Index = self.data_index
-        total_error_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
-        total_error_count: int = total_error_loc.count
+        total_target_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
+        total_target_count: int = total_target_loc.count
         for result_path in results:
             expanded_result_items: list[ResultItem] = [m for m in result_path.items]
             expanded_result_loc: IndexLocations = result_path.locations
@@ -262,15 +268,15 @@ class BinMerger:
                         new_merged_bin_loc = _merged_bin_loc | next_loc
                         new_result_loc: IndexLocations = other_items_loc & new_merged_bin_loc
                         new_result_count: int = new_result_loc.count
-                        new_result_err_loc: IndexLocations = new_result_loc & total_error_loc
-                        new_error_count: int = new_result_err_loc.count
-                        new_error_rate: float = new_error_count / new_result_count
-                        new_error_coverage: float = new_error_count / total_error_count
-                        new_weight: float = calc_weight(len(expanded_result_items), new_error_coverage,
-                                                        new_error_rate, index.total_error_rate)
+                        new_result_err_loc: IndexLocations = new_result_loc & total_target_loc
+                        new_target_count: int = new_result_err_loc.count
+                        new_target_rate: float = new_target_count / new_result_count
+                        new_target_coverage: float = new_target_count / total_target_count
+                        new_weight: float = calc_weight(len(expanded_result_items), new_target_coverage,
+                                                        new_target_rate, index.total_target_rate)
                         if new_weight >= last_weight:
                             _merged_bin_loc = new_merged_bin_loc
-                            last_weight = new_error_rate
+                            last_weight = new_target_rate
                             if direction == 'up':
                                 upper_bin_pos = bin_pos
                             else:
@@ -288,6 +294,7 @@ class BinMerger:
                 expanded_result_items[item_pos] = ResultItem(col, self.column_types[col], merge_bin, _merged_bin_loc)
                 expanded_result_loc = other_items_loc & _merged_bin_loc
             final_results.append(ResultPath(expanded_result_items, expanded_result_loc))
+        print("Expand cost: %.2f seconds" % (time.time() - start_time))
         return final_results
 
 

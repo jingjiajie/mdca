@@ -25,7 +25,7 @@ class MCTSTreeNode:
         self._self_weight: float = -1
         self.locations: IndexLocations = locations
         self.full_visited_flag: bool = False
-        self._error_count: int = -1
+        self._target_count: int = -1
         self.depth: int
         if parent is None:
             self.depth = 0
@@ -41,26 +41,26 @@ class MCTSTreeNode:
         return self.locations.count
 
     @property
-    def error_count(self) -> int:
-        if self._error_count == -1:
+    def target_count(self) -> int:
+        if self._target_count == -1:
             index: Index = self.tree.data_index
-            self._error_count = (self.locations & index.total_error_locations).count
-        return self._error_count
+            self._target_count = (self.locations & index.total_target_locations).count
+        return self._target_count
 
     @property
-    def error_coverage(self) -> float:
+    def target_coverage(self) -> float:
         index: Index = self.tree.data_index
-        return self.error_count / index.total_error_locations.count
+        return self.target_count / index.total_target_locations.count
 
     @property
-    def error_rate(self) -> float:
-        return self.error_count / self.count
+    def target_rate(self) -> float:
+        return self.target_count / self.count
 
     @property
     def weight(self) -> float:
         if self._self_weight == -1:
             self._self_weight = calc_weight(
-                self.depth, self.error_coverage, self.error_rate, self.tree.data_index.total_error_rate)
+                self.depth, self.target_coverage, self.target_rate, self.tree.data_index.total_target_rate)
         return self._self_weight
 
     @property
@@ -88,18 +88,18 @@ class MCTSTreeNode:
         columns_after: list[str] = self.tree.data_index.get_columns_after(self.column)
         for col in columns_after:
             value_dict: dict[Value | pd.Interval, IndexLocations] =\
-                self.tree._get_values_satisfy_min_error_coverage_by_column(col)
+                self.tree._get_values_satisfy_min_target_coverage_by_column(col)
             for val, val_loc in value_dict.items():
                 fast_predict_intersect_count: bool | None = Index.fast_predict_bool_intersect_count(
-                    [self.locations, val_loc, index.total_error_locations])
+                    [self.locations, val_loc, index.total_target_locations])
                 if (fast_predict_intersect_count is not None and
-                        fast_predict_intersect_count < self.tree.min_error_count * 0.5):
+                        fast_predict_intersect_count < self.tree.min_target_count * 0.5):
                     continue
                 child_loc: IndexLocations = self.locations & val_loc
                 child = MCTSTreeNode(self.tree, self, col, val, child_loc)
-                if child.count < self.tree.min_error_count:
+                if child.count < self.tree.min_target_count:
                     continue
-                if child.error_count < self.tree.min_error_count:
+                if child.target_count < self.tree.min_target_count:
                     continue
                 if child.weight == 0:
                     continue
