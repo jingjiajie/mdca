@@ -8,7 +8,7 @@ import pandas as pd
 
 from analyzer.Index import Index, IndexLocations
 from analyzer.ResultPath import ResultPath, ResultItem
-from analyzer.commons import calc_weight_fairness, Value, calc_weight_distribution
+from analyzer.commons import calc_weight_fairness, Value, calc_weight_distribution, calc_weight_error
 
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
@@ -62,7 +62,7 @@ class MCTSTreeNode:
         return self.target_count / index.total_target_count
 
     @property
-    def total_coverage(self) -> float:
+    def coverage(self) -> float:
         index: Index = self.tree.data_index
         return self.count / index.total_count
 
@@ -75,6 +75,9 @@ class MCTSTreeNode:
         if self._self_weight == -1:
             if self.tree.search_mode == 'fairness':
                 self._self_weight = calc_weight_fairness(
+                    self.depth, self.coverage, self.target_rate, self.tree.data_index.total_target_rate)
+            elif self.tree.search_mode == 'error':
+                self._self_weight = calc_weight_error(
                     self.depth, self.target_coverage, self.target_rate, self.tree.data_index.total_target_rate)
             elif self.tree.search_mode == 'distribution':
                 col_values: dict[str, Value | pd.Interval] = {}
@@ -84,7 +87,7 @@ class MCTSTreeNode:
                         col_values[node.column] = node.value
                     node = node.parent
                 baseline_coverage: float = self.tree.data_index.get_column_combination_coverage_baseline(col_values)
-                self._self_weight = calc_weight_distribution(self.depth, self.total_coverage, baseline_coverage)
+                self._self_weight = calc_weight_distribution(self.depth, self.coverage, baseline_coverage)
         return self._self_weight
 
     @property
@@ -111,29 +114,28 @@ class MCTSTreeNode:
         index: Index = self.tree.data_index
         children: dict[str, MCTSTreeNode] = {}
         columns_after: list[str] = self.tree.data_index.get_columns_after(self.column)
-        is_fairness: bool = self.tree.search_mode == 'fairness'
         for col in columns_after:
-            value_dict: dict[Value | pd.Interval, IndexLocations] =\
-                self.tree._get_candidate_values_by_column(col)
+            value_dict: dict[Value | pd.Interval, IndexLocations] = self.tree._get_candidate_values_by_column(col)
             for val, val_loc in value_dict.items():
-
-                fast_predict_intersect_count: bool | None
-                if is_fairness:
-                    fast_predict_intersect_count = Index.fast_predict_bool_intersect_count(
+                if self.tree.min_count > 0:
+                    fast_predict_count: bool | None = Index.fast_predict_bool_intersect_count(
+                            [self.locations, val_loc])
+                    if (fast_predict_count is not None and
+                            fast_predict_count < self.tree.min_count * 0.5):
+                        continue
+                if self.tree.min_target_count > 0:
+                    fast_predict_count: bool | None = Index.fast_predict_bool_intersect_count(
                         [self.locations, val_loc, index.total_target_locations])
-                else:
-                    fast_predict_intersect_count = Index.fast_predict_bool_intersect_count(
-                        [self.locations, val_loc])
-                if (fast_predict_intersect_count is not None and
-                        fast_predict_intersect_count < self.tree.min_count * 0.5):
-                    continue
+                    if (fast_predict_count is not None and
+                            fast_predict_count < self.tree.min_target_count * 0.5):
+                        continue
                 child_loc: IndexLocations = self.locations & val_loc
                 child = MCTSTreeNode(self.tree, self, col, val, child_loc)
                 if child.count < self.tree.min_count:
                     continue
-                if is_fairness and child.target_count < self.tree.min_count:
+                elif self.tree.target_column is not None and child.target_count < self.tree.min_target_count:
                     continue
-                if child.weight == 0:
+                elif child.weight == 0:
                     continue
                 children[str(child)] = child
         self.children = children

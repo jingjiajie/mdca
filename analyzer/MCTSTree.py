@@ -6,24 +6,33 @@ from bitarray import bitarray
 
 from analyzer.Index import Index, IndexLocations
 from analyzer.MCTSTreeNode import MCTSTreeNode, TreeNodeState
-from analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
+from analyzer.ResultPath import ResultPath
 from analyzer.commons import Value, ColumnInfo
 
 
 class MCTSTree:
 
-    def __init__(self, data_index: Index, column_info: dict[str, ColumnInfo], search_mode: str, min_coverage: float):
+    def __init__(self, data_index: Index, column_info: dict[str, ColumnInfo], target_column: str,
+                 target_value: Value | None, search_mode: str,
+                 min_coverage: float | None, min_target_coverage: float | None):
+        if min_coverage is None and min_target_coverage is None:
+            raise Exception('At least one of min_coverage or min_target_coverage must be specified!')
         self.data_index: Index = data_index
         self.column_info: dict[str, ColumnInfo] = column_info
+        self.target_column: str = target_column
+        self.target_value: Value | None = target_value
         self.search_mode: str = search_mode
         self._root: MCTSTreeNode
 
-        self.min_coverage: float = min_coverage
-        self.min_count: int
-        if search_mode == 'fairness':
-            self.min_count = int(data_index.total_target_count * self.min_coverage)
-        elif search_mode == 'distribution':
+        self.min_coverage: float | None = min_coverage
+        self.min_target_coverage: float | None = min_target_coverage
+        self.min_count: int = 0
+        self.min_target_count: int = 0
+        if min_coverage is not None:
             self.min_count = int(data_index.total_count * self.min_coverage)
+        if min_target_coverage is not None:
+            self.min_target_count = int(data_index.total_target_count * min_target_coverage)
+
         self._column_values_candidate: dict[str, dict[Value | pd.Interval, IndexLocations]] = {}
         for col in data_index.get_columns_after(None):
             self._column_values_candidate[col] = {}
@@ -36,6 +45,10 @@ class MCTSTree:
                 loc: IndexLocations = data_index.get_locations(col, val)
                 if loc.count < self.min_count:
                     continue
+                if data_index.target_column is not None:
+                    target_loc: IndexLocations = loc & data_index.total_target_locations
+                    if target_loc.count < self.min_target_count:
+                        continue
                 self._column_values_candidate[col][val] = loc
 
     def _reset(self):

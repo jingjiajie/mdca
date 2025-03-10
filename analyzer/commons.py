@@ -15,22 +15,21 @@ class ColumnInfo:
         self.q100: float | None = q100
 
 
-def calc_weight_fairness(dimensions: int, target_coverage: float,
-                         target_rate: float, total_target_rate: float) -> float:
-    _ALPHA: float = 1
-    _BETA: float = 1 / 2
-    _GAMMA: float = 3 / 2
-    # if target_rate < total_target_rate:
-    #     return dimensions ** _ALPHA * target_coverage ** _BETA * (target_rate*_EPSILON) ** _GAMMA
-    # else:
-    #     return dimensions ** _ALPHA * target_coverage ** _BETA * (target_rate - total_target_rate + _EPSILON) ** _GAMMA
+def calc_weight_error(dimensions: int, error_coverage: float, error_rate: float, total_error_rate: float) -> float:
+    ALPHA: float = 1
+    BETA: float = 1 / 2
+    GAMMA: float = 3 / 2
+    return ALPHA**-(dimensions-1) * error_coverage**BETA * abs(error_rate - total_error_rate)**GAMMA
 
-    return _ALPHA**-(dimensions-1) * target_coverage**_BETA * abs(target_rate - total_target_rate)**_GAMMA
+
+def calc_weight_fairness(dimensions: int, coverage: float, target_rate: float, total_target_rate: float) -> float:
+    ALPHA: float = 1
+    BETA: float = 1 / 2
+    GAMMA: float = 3 / 2
+    return ALPHA**-(dimensions-1) * coverage**BETA * abs(target_rate - total_target_rate)**GAMMA
 
 
 def calc_weight_distribution(dimensions: int, coverage: float, baseline_coverage: float) -> float:
-    # if coverage < baseline_coverage:
-    #     return 0
     return (10000 *
             2**-(dimensions - 1) *
             (coverage - baseline_coverage)**2 *

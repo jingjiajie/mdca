@@ -8,7 +8,7 @@ from bitarray import bitarray
 
 from analyzer.Index import Index, IndexLocations
 from analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
-from analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, ColumnInfo
+from analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, ColumnInfo, calc_weight_error
 
 
 class BinMerger:
@@ -113,7 +113,8 @@ class BinMerger:
                                 merge_bin: pd.Interval = cast(pd.Interval, merge_item.value)
                                 left: int = min(this_bin.left, merge_bin.left)
                                 right: int = max(this_bin.right, merge_bin.right)
-                                overlapped: bool = max(this_bin.left, merge_bin.left) <= min(this_bin.right, merge_bin.right)
+                                overlapped: bool = max(this_bin.left, merge_bin.left) <= min(this_bin.right,
+                                                                                             merge_bin.right)
                                 if not overlapped:
                                     all_overlapped = False
                                 new_bin = pd.Interval(left, right, closed='left')
@@ -130,10 +131,10 @@ class BinMerger:
                     calc_cur: CalculatedResult = cur_res.calculate(self.data_index)
                     calc_compare: CalculatedResult = merge_res.calculate(self.data_index)
                     if calc_new.weight >= min(calc_cur.weight, calc_compare.weight):
-                    # TODO 合并策略
-                    # if calc_new.target_rate >= min(calc_cur.target_rate, calc_compare.target_rate):
-                    # if all_overlapped:
-                    # if True:
+                        # TODO 合并策略
+                        # if calc_new.target_rate >= min(calc_cur.target_rate, calc_compare.target_rate):
+                        # if all_overlapped:
+                        # if True:
                         merge_successful = True
                         group.remove(merge_res)
                         group.append(new_res)
@@ -160,7 +161,7 @@ class BinMerger:
             expanded_result_loc: IndexLocations = result_path.locations
             for item_pos in range(0, len(expanded_result_items)):
                 result_item: ResultItem = expanded_result_items[item_pos]
-                result_calc: CalculatedResult =\
+                result_calc: CalculatedResult = \
                     ResultPath(expanded_result_items, expanded_result_loc, self.search_mode).calculate(index)
                 col: str = result_item.column
                 col_info: ColumnInfo = self.column_info[col]
@@ -209,22 +210,31 @@ class BinMerger:
                         if self.search_mode == 'fairness':
                             total_target_loc: IndexLocations = index.get_locations(index.target_column,
                                                                                    index.target_value)
+                            new_result_target_loc: IndexLocations = new_result_loc & total_target_loc
+                            new_target_count: int = new_result_target_loc.count
+                            new_target_rate: float = new_target_count / new_result_count
+                            new_coverage: float = new_target_count / index.total_count
+                            new_weight = calc_weight_fairness(len(expanded_result_items), new_coverage,
+                                                              new_target_rate, index.total_target_rate)
+                        elif self.search_mode == 'error':
+                            total_target_loc: IndexLocations = index.get_locations(index.target_column,
+                                                                                   index.target_value)
                             total_target_count: int = total_target_loc.count
                             new_result_target_loc: IndexLocations = new_result_loc & total_target_loc
                             new_target_count: int = new_result_target_loc.count
                             new_target_rate: float = new_target_count / new_result_count
                             new_target_coverage: float = new_target_count / total_target_count
-                            new_weight = calc_weight_fairness(len(expanded_result_items), new_target_coverage,
-                                                              new_target_rate, index.total_target_rate)
+                            new_weight = calc_weight_error(len(expanded_result_items), new_target_coverage,
+                                                           new_target_rate, index.total_target_rate)
                         elif self.search_mode == 'distribution':
-                            new_total_coverage: float = new_result_count / index.total_count
+                            new_coverage: float = new_result_count / index.total_count
                             expanded_column_values: dict[str, Value | pd.Interval] = {}
                             for item in expanded_result_items:
                                 expanded_column_values[item.column] = item.value
                             baseline_coverage: float = (
                                 index.get_column_combination_coverage_baseline(expanded_column_values))
                             new_weight = calc_weight_distribution(
-                                len(expanded_result_items), new_total_coverage, baseline_coverage)
+                                len(expanded_result_items), new_coverage, baseline_coverage)
                         if new_weight >= last_weight:
                             _merged_bin_loc = new_merged_bin_loc
                             last_weight = new_weight

@@ -8,6 +8,7 @@ from bitarray import bitarray
 
 from analyzer.commons import Value, ColumnInfo
 
+BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD: int = 10000
 BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE: float = 0.01
 
 _thread_local: threading.local = threading.local()
@@ -20,9 +21,13 @@ class IndexLocations:
         self.index_length = len(locations)
 
         sample_step: int = int(1/BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE)
-        self._sampled_locations: bitarray = locations[sample_step-1::sample_step]
+        self._sampled_locations: bitarray
+        if self.index_length < BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD:
+            self._sampled_locations = locations
+        else:
+            self._sampled_locations = locations[sample_step-1::sample_step]
 
-        sample_length: int = int(len(locations) * BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE)
+        sample_length: int = len(self._sampled_locations)
         tmp_index_key: str = "temp_bitarray_" + str(sample_length)
         if not hasattr(_thread_local, tmp_index_key):
             _thread_local.__setattr__(tmp_index_key, bitarray(sample_length))

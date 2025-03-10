@@ -98,33 +98,33 @@ if __name__ == '__main__':
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='BAD', target_value=1,
                                                                     # min_coverage=0.05, search_mode=search_mode)
 
-    data_df = pl.read_csv('data/flights/flights.csv', encoding="utf8-lossy").to_pandas()
-
-    data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
-                             data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
-                             data_df['WEATHER_DELAY'].isna())
-    data_df.drop(['DEPARTURE_DELAY','ARRIVAL_DELAY','AIR_SYSTEM_DELAY', 'SECURITY_DELAY',
-                  'AIRLINE_DELAY', 'LATE_AIRCRAFT_DELAY', 'WEATHER_DELAY'],
-                 axis=1, inplace=True)
-
-    data_df = data_df[['YEAR','MONTH','DAY','DAY_OF_WEEK','AIRLINE','FLIGHT_NUMBER',
-                       'TAIL_NUMBER','ORIGIN_AIRPORT','DESTINATION_AIRPORT','DELAYED']]
-    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED', target_value=1,
-                                                                  min_coverage=0.05, search_mode=search_mode)
+    # data_df = pl.read_csv('data/flights/flights.csv', encoding="utf8-lossy").to_pandas()
+    #
+    # data_df['DELAYED'] = ~(data_df['AIR_SYSTEM_DELAY'].isna() & data_df['SECURITY_DELAY'].isna() &
+    #                          data_df['AIRLINE_DELAY'].isna() & data_df['LATE_AIRCRAFT_DELAY'].isna() &
+    #                          data_df['WEATHER_DELAY'].isna())
+    # data_df.drop(['DEPARTURE_DELAY','ARRIVAL_DELAY','AIR_SYSTEM_DELAY', 'SECURITY_DELAY',
+    #               'AIRLINE_DELAY', 'LATE_AIRCRAFT_DELAY', 'WEATHER_DELAY'],
+    #              axis=1, inplace=True)
+    #
+    # data_df = data_df[['YEAR','MONTH','DAY','DAY_OF_WEEK','AIRLINE','FLIGHT_NUMBER',
+    #                    'TAIL_NUMBER','ORIGIN_AIRPORT','DESTINATION_AIRPORT','DELAYED']]
+    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='DELAYED', target_value=1,
+    #                                                               min_coverage=0.05, search_mode=search_mode)
 
     # data_df: pd.DataFrame = pd.read_csv('data/tianchi-loan/pred_2011.csv')
     # data_df = data_df[data_df['term'] != 6]
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='isError', target_value=1,
     #                                                               min_coverage=0.02, search_mode=search_mode)
 
-    # print('Loading data...')
-    # data_df: pd.DataFrame = pl.read_csv('data/recruitment/recruitmentdataset-2022-1.3.csv', encoding="utf8-lossy").to_pandas()
-    # print('Load data cost: %.2f seconds' % (time.time() - start))
+    print('Loading data...')
+    data_df: pd.DataFrame = pl.read_csv('data/recruitment/recruitmentdataset-2022-1.3.csv', encoding="utf8-lossy").to_pandas()
+    print('Load data cost: %.2f seconds' % (time.time() - start))
     # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, target_column='decision', target_value=True,
     #                                                               search_mode=search_mode, min_coverage=0.05)
-    # data_df.drop(['decision'], axis=1, inplace=True)
-    # analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, None, None,
-    #                                                               search_mode=search_mode, min_coverage=0.05)
+    data_df.drop(['decision'], axis=1, inplace=True)
+    analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df, None, None,
+                                                                  search_mode=search_mode, min_coverage=0.05)
 
     results: list[CalculatedResult] = analyzer.run()
     index: Index = analyzer.data_index
@@ -133,10 +133,10 @@ if __name__ == '__main__':
     if search_mode == 'fairness':
         print('\n========== Overall ============')
         print("Total rows: %d" % index.total_count)
-        print("Baseline target rate: %5.2f%%" % (index.total_target_rate * 100))
+        print("Overall target rate: %5.2f%%" % (index.total_target_rate * 100))
 
         def _print_fairness_results(results: list[CalculatedResult]):
-            print('Target Rate(Baseline+N%),\tTarget Coverage(Count),\tResult')
+            print('Target Rate(Overall+N%),\tTarget Coverage(Count),\tResult')
             for r in results:
                 target_count: int = r.target_count
                 target_rate: float = r.target_rate
@@ -150,37 +150,82 @@ if __name__ == '__main__':
                       )
 
         print('\n========== Results of Target Rate Increase ============')
-        res_inc: list[CalculatedResult] = filter(lambda r: (r.target_rate >= index.total_target_rate), results)
+        res_inc: list[CalculatedResult] = list(filter(lambda r: (r.target_rate >= index.total_target_rate), results))
         res_inc = sorted(res_inc, key=lambda r: r.weight, reverse=True)
         _print_fairness_results(res_inc)
         print('\n========== Results of Target Rate Decrease ============')
-        res_dec: list[CalculatedResult] = filter(lambda r: (r.target_rate < index.total_target_rate), results)
+        res_dec: list[CalculatedResult] = list(filter(lambda r: (r.target_rate < index.total_target_rate), results))
+        res_dec = sorted(res_dec, key=lambda r: r.weight, reverse=True)
+        _print_fairness_results(res_dec)
+
+    elif search_mode == 'error':
+        print('\n========== Overall ============')
+        print("Total rows: %d" % index.total_count)
+        print("Overall error rate: %5.2f%%" % (index.total_target_rate * 100))
+
+        def _print_fairness_results(results: list[CalculatedResult]):
+            print('Error Rate(Overall+N%),\tError Coverage(Count),\tResult')
+            for r in results:
+                target_count: int = r.target_count
+                target_rate: float = r.target_rate
+                target_coverage: float = r.target_coverage
+                print("%5.2f%% (%+6.2f%%),\t\t\t%5.2f%% (%6d),\t%s" %
+                      (100 * target_rate,
+                       100 * (target_rate - index.total_target_rate),
+                       100 * target_coverage,
+                       target_count,
+                       str(r))
+                      )
+
+        print('\n========== Results of Error Rate Increase ============')
+        res_inc: list[CalculatedResult] = list(filter(lambda r: (r.target_rate >= index.total_target_rate), results))
+        res_inc = sorted(res_inc, key=lambda r: r.weight, reverse=True)
+        _print_fairness_results(res_inc)
+        print('\n========== Results of Error Rate Decrease ============')
+        res_dec: list[CalculatedResult] = list(filter(lambda r: (r.target_rate < index.total_target_rate), results))
         res_dec = sorted(res_dec, key=lambda r: r.weight, reverse=True)
         _print_fairness_results(res_dec)
 
     elif search_mode == 'distribution':
         print('\n========== Overall ============')
         print("Total rows: %d" % index.total_count)
+        if analyzer.target_column is not None:
+            print("Overall target rate: %5.2f%%" % (index.total_target_rate * 100))
 
         def _print_distribution_results(results: list[CalculatedResult]):
-            print('Coverage,\tBaseline,\tBaseline+N%,\tBaseline*X,\tResult')
-            for res in results:
-                coverage: float = res.total_coverage
-                baseline_coverage: float = res.baseline_coverage
-                print("%5.2f%%,\t\t%5.2f%%,\t\t%+6.2f%%,\t\t*%-5.2f,\t\t%s, %.2f" %
-                      (100 * coverage,
-                       100 * baseline_coverage,
-                       100 * (coverage - baseline_coverage),
-                       (coverage / baseline_coverage),
-                       str(res), res.weight)
-                      )
+            if analyzer.target_column is not None:
+                print('Coverage (Baseline, +N%, *X),\t\tTarget Rate(Overall +%N),\tResult')
+                for res in results:
+                    coverage: float = res.coverage
+                    baseline_coverage: float = res.baseline_coverage
+                    target_rate: float = res.target_rate
+                    print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%5.2f%% (%+6.2f%%),\t\t\t%s, %.2f" %
+                          (100 * coverage,
+                           100 * baseline_coverage,
+                           100 * (coverage - baseline_coverage),
+                           (coverage / baseline_coverage),
+                           100 * target_rate,
+                           100 * (target_rate - index.total_target_rate),
+                           str(res), res.weight)
+                          )
+            else:
+                print('Coverage (Baseline, +N%, *X),\t\tResult')
+                for res in results:
+                    coverage: float = res.coverage
+                    baseline_coverage: float = res.baseline_coverage
+                    print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%s, %.2f" %
+                          (100 * coverage,
+                           100 * baseline_coverage,
+                           100 * (coverage - baseline_coverage),
+                           (coverage / baseline_coverage),
+                           str(res), res.weight))
 
         print('\n========== Results of Coverage Increase ============')
-        res_inc: list[CalculatedResult] = filter(lambda r: (r.total_coverage >= r.baseline_coverage), results)
+        res_inc: list[CalculatedResult] = list(filter(lambda r: (r.coverage >= r.baseline_coverage), results))
         res_inc = sorted(res_inc, key=lambda r: r.weight, reverse=True)
         _print_distribution_results(res_inc)
 
         print('\n========== Results of Coverage Decrease ============')
-        res_dec: list[CalculatedResult] = filter(lambda r: (r.total_coverage < r.baseline_coverage), results)
+        res_dec: list[CalculatedResult] = list(filter(lambda r: (r.coverage < r.baseline_coverage), results))
         res_dec = sorted(res_dec, key=lambda r: r.weight, reverse=True)
         _print_distribution_results(res_dec)

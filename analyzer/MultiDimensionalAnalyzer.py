@@ -21,15 +21,16 @@ SORT_UNIQUE_VALUES_THRESHOLD = 20
 class MultiDimensionalAnalyzer:
 
     def __init__(self, data_df: pd.DataFrame, target_column: str | None, target_value: Value | None, search_mode: str,
-                 min_coverage: float = 0.05):
-        if search_mode not in ['fairness', 'distribution']:
-            raise Exception('search_mode must be fairness or distribution, actual: %s' % search_mode)
-        self.min_coverage: float = min_coverage
+                 min_coverage: float | None = None, min_target_coverage: float | None = None):
+        if search_mode not in ['fairness', 'distribution', 'error']:
+            raise Exception('search_mode must be fairness, distribution or error, actual: %s' % search_mode)
+        self.min_coverage: float | None = min_coverage
+        self.min_target_coverage: float | None = min_target_coverage
         self.search_mode: str = search_mode
 
         preprocessor: DataPreprocessor = DataPreprocessor()
-        process_result: ProcessResult = (
-            preprocessor.process(data_df, target_column, target_value, min_coverage, search_mode))
+        process_result: ProcessResult = preprocessor.process(data_df, target_column, target_value, min_coverage,
+                                                             min_target_coverage)
         self.column_info: dict[str, ColumnInfo] = process_result.column_info
         self.processed_data_df: pd.DataFrame = process_result.data_df
 
@@ -92,7 +93,8 @@ class MultiDimensionalAnalyzer:
             raise Exception('Unexpected type %s of target column %s' % (target_col_type, target_column))
 
     def run(self, mcts_rounds: int = 100000, max_results: int = 20) -> list[CalculatedResult]:
-        tree: MCTSTree | None = MCTSTree(self.data_index, self.column_info, self.search_mode, self.min_coverage)
+        tree: MCTSTree | None = MCTSTree(self.data_index, self.column_info, self.target_column, self.target_value,
+                                         self.search_mode, self.min_coverage, self.min_target_coverage)
         tree.run(mcts_rounds)
 
         start_time: float = time.time()
@@ -102,12 +104,12 @@ class MultiDimensionalAnalyzer:
             result: ResultPath | None = tree.next_result()
             if result is None:
                 break
-            if self.search_mode == 'fairness':
+            if self.search_mode in ['fairness', 'error']:
                 result = chi2_filter(result, self.search_mode)
                 if result is None:
                     continue
             calculated_res: CalculatedResult = result.calculate(self.data_index)
-            if self.search_mode == 'fairness':
+            if self.search_mode in ['fairness', 'error']:
                 if calculated_res.target_rate >= self.data_index.total_target_rate:
                     if len(result_cluster_set_inc) >= max_results:
                         continue
@@ -117,7 +119,7 @@ class MultiDimensionalAnalyzer:
                         continue
                     result_cluster_set_dec.cluster_result(calculated_res)
             elif self.search_mode == 'distribution':
-                if calculated_res.total_coverage >= calculated_res.baseline_coverage:
+                if calculated_res.coverage >= calculated_res.baseline_coverage:
                     if len(result_cluster_set_inc) >= max_results:
                         continue
                     result_cluster_set_inc.cluster_result(calculated_res)
@@ -127,7 +129,7 @@ class MultiDimensionalAnalyzer:
                     result_cluster_set_dec.cluster_result(calculated_res)
         results: list[ResultPath] = result_cluster_set_inc.get_results() + result_cluster_set_dec.get_results()
         del tree
-        if self.search_mode == 'fairness':
+        if self.search_mode in ['fairness', 'error']:
             print("Clustering results (+Chi2-test) cost: %.2f seconds" % (time.time() - start_time))
         elif self.search_mode == 'distribution':
             print("Clustering results cost: %.2f seconds" % (time.time() - start_time))
@@ -146,11 +148,5 @@ class MultiDimensionalAnalyzer:
                 result_map[str(res)] = res
         results = list(result_map.values())
         calculated_results: list[CalculatedResult] = list(map(lambda r: r.calculate(self.data_index), results))
-        if self.search_mode == 'fairness':
-            calculated_results = (
-                sorted(calculated_results, key=lambda r: r.weight, reverse=True))
-        elif self.search_mode == 'distribution':
-            calculated_results = sorted(calculated_results,
-                                        key=lambda r: (r.total_coverage > r.baseline_coverage, r.weight),
-                                        reverse=True)
+        calculated_results = sorted(calculated_results, key=lambda r: r.weight, reverse=True)
         return calculated_results
