@@ -213,19 +213,19 @@ class BinMerger:
                             new_result_target_loc: IndexLocations = new_result_loc & total_target_loc
                             new_target_count: int = new_result_target_loc.count
                             new_target_rate: float = new_target_count / new_result_count
-                            new_coverage: float = new_target_count / index.total_count
+                            new_coverage: float = new_result_loc.count / index.total_count
                             new_weight = calc_weight_fairness(len(expanded_result_items), new_coverage,
                                                               new_target_rate, index.total_target_rate)
                         elif self.search_mode == 'error':
-                            total_target_loc: IndexLocations = index.get_locations(index.target_column,
+                            total_error_loc: IndexLocations = index.get_locations(index.target_column,
                                                                                    index.target_value)
-                            total_target_count: int = total_target_loc.count
-                            new_result_target_loc: IndexLocations = new_result_loc & total_target_loc
-                            new_target_count: int = new_result_target_loc.count
-                            new_target_rate: float = new_target_count / new_result_count
-                            new_target_coverage: float = new_target_count / total_target_count
-                            new_weight = calc_weight_error(len(expanded_result_items), new_target_coverage,
-                                                           new_target_rate, index.total_target_rate)
+                            total_error_count: int = total_error_loc.count
+                            new_result_error_loc: IndexLocations = new_result_loc & total_error_loc
+                            new_error_count: int = new_result_error_loc.count
+                            new_error_rate: float = new_error_count / new_result_count
+                            new_error_coverage: float = new_error_count / total_error_count
+                            new_weight = calc_weight_error(len(expanded_result_items), new_error_coverage,
+                                                           new_error_rate, index.total_target_rate)
                         elif self.search_mode == 'distribution':
                             new_coverage: float = new_result_count / index.total_count
                             expanded_column_values: dict[str, Value | pd.Interval] = {}

@@ -22,22 +22,15 @@ class DataPreprocessor:
     def __init__(self):
         pass
 
-    def process(self, data_df: pd.DataFrame, target_column: str | None, target_value: Value | None,
-                min_coverage: float | None, min_target_coverage: float | None) -> ProcessResult:
+    def process(self, data_df: pd.DataFrame, target_column: str | None,
+                min_coverage: float | None) -> ProcessResult:
         print("Preprocessing data...")
-        if target_column is None and min_target_coverage is not None:
-            raise Exception('target_column must be specified when min_target_coverage (%s) is specified!' %
-                            min_target_coverage)
-        elif min_coverage is None and min_target_coverage is None:
-            raise Exception('At least one of min_coverage or min_target_coverage must be specified!')
+        if min_coverage is None:
+            raise Exception('min_coverage must be specified!')
         start: float = time.time()
         min_count: int = 0
-        min_target_count: int = 0
         if min_coverage is not None:
             min_count = int(len(data_df) * min_coverage)
-        if min_target_coverage is not None:
-            target_count: int = np.count_nonzero(data_df[target_column] == target_value)
-            min_target_count = int(target_count * min_coverage)
         single_value_columns: list[str] = []
         for col_name in data_df.columns:
             unique_values: np.ndarray = data_df[col_name].unique()
