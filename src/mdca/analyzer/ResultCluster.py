@@ -1,4 +1,4 @@
-from analyzer.ResultPath import CalculatedResult
+from mdca.analyzer.ResultPath import CalculatedResult
 
 
 RESULT_CLUSTER_MAX_DISTANCE: float = 0.35

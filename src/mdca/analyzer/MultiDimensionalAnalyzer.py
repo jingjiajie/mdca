@@ -3,14 +3,14 @@ import time
 import numpy as np
 import pandas as pd
 
-from analyzer.BinMerger import BinMerger
-from analyzer.Index import Index
-from analyzer.MCTSTree import MCTSTree
-from analyzer.ResultCluster import ResultClusterSet
-from analyzer.ResultPath import ResultPath, CalculatedResult
-from analyzer.DataPreprocessor import DataPreprocessor, ProcessResult
-from analyzer.chi2_filter import chi2_filter
-from analyzer.commons import Value, ColumnInfo
+from mdca.analyzer.BinMerger import BinMerger
+from mdca.analyzer.Index import Index
+from mdca.analyzer.MCTSTree import MCTSTree
+from mdca.analyzer.ResultCluster import ResultClusterSet
+from mdca.analyzer.ResultPath import ResultPath, CalculatedResult
+from mdca.analyzer.DataPreprocessor import DataPreprocessor, ProcessResult
+from mdca.analyzer.chi2_filter import chi2_filter
+from mdca.analyzer.commons import Value, ColumnInfo
 
 BIN_NUMBER: int = 50
 MIN_BIN: int = 1
@@ -271,26 +271,26 @@ class MultiDimensionalAnalyzer:
                         coverage: float = res.coverage
                         baseline_coverage: float = res.baseline_coverage
                         target_rate: float = res.target_rate
-                        print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%5.2f%% (%+6.2f%%),\t\t\t%s, %.2f" %
+                        print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%5.2f%% (%+6.2f%%),\t\t%s" %
                               (100 * coverage,
                                100 * baseline_coverage,
                                100 * (coverage - baseline_coverage),
                                (coverage / baseline_coverage),
                                100 * target_rate,
                                100 * (target_rate - index.total_target_rate),
-                               str(res), res.weight)
+                               str(res))
                               )
                 else:
                     print('Coverage (Baseline, +N%, *X),\t\tResult')
                     for res in results:
                         coverage: float = res.coverage
                         baseline_coverage: float = res.baseline_coverage
-                        print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%s, %.2f" %
+                        print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%s" %
                               (100 * coverage,
                                100 * baseline_coverage,
                                100 * (coverage - baseline_coverage),
                                (coverage / baseline_coverage),
-                               str(res), res.weight))
+                               str(res)))
 
             print('\n========== Results of Coverage Increase ============')
             res_inc: list[CalculatedResult] = list(filter(lambda r: (r.coverage >= r.baseline_coverage), results))

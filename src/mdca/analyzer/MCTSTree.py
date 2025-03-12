@@ -4,10 +4,10 @@ from typing import cast
 import pandas as pd
 from bitarray import bitarray
 
-from analyzer.Index import Index, IndexLocations
-from analyzer.MCTSTreeNode import MCTSTreeNode, TreeNodeState
-from analyzer.ResultPath import ResultPath
-from analyzer.commons import Value, ColumnInfo
+from mdca.analyzer.Index import Index, IndexLocations
+from mdca.analyzer.MCTSTreeNode import MCTSTreeNode, TreeNodeState
+from mdca.analyzer.ResultPath import ResultPath
+from mdca.analyzer.commons import Value, ColumnInfo
 
 
 class MCTSTree:

@@ -1,11 +1,9 @@
-import time
-
 import numpy as np
 from bitarray import bitarray
 from scipy import stats
 
-from analyzer.Index import IndexLocations
-from analyzer.ResultPath import ResultItem, ResultPath
+from mdca.analyzer.Index import IndexLocations
+from mdca.analyzer.ResultPath import ResultItem, ResultPath
 
 CHI2_THRESHOLD: float = 0.05
 

@@ -1,14 +1,13 @@
 import time
-from copy import copy
 from typing import cast
 
 import numpy as np
 import pandas as pd
 from bitarray import bitarray
 
-from analyzer.Index import Index, IndexLocations
-from analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
-from analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, ColumnInfo, calc_weight_error
+from mdca.analyzer.Index import Index, IndexLocations
+from mdca.analyzer.ResultPath import ResultPath, ResultItem, CalculatedResult
+from mdca.analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, ColumnInfo, calc_weight_error
 
 
 class BinMerger:

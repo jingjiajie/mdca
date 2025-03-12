@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from bitarray import bitarray
 
-from analyzer.commons import Value, ColumnInfo
+from mdca.analyzer.commons import Value, ColumnInfo
 
 BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD: int = 10000
 BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE: float = 0.01
@@ -191,7 +191,8 @@ class Index:
             if cache_key in self._baseline_coverage_cache:
                 categorical_baseline_coverage = self._baseline_coverage_cache[cache_key]
             else:
-                categorical_unique_combinations: pd.Series = self.data_df[categorical_columns].drop_duplicates()
+                categorical_unique_combinations: pd.Series = (
+                    self.data_df[categorical_columns].drop_duplicates().dropna(ignore_index=True))
                 categorical_baseline_coverage: float = 1 / len(categorical_unique_combinations)
                 self._baseline_coverage_cache[cache_key] = categorical_baseline_coverage
             baseline_coverage *= categorical_baseline_coverage
@@ -199,7 +200,10 @@ class Index:
             outer_hypercube_volume: float = 1
             inner_hypercube_volume: float = 1
             for col in continuous_columns:
-                val_bin: pd.Interval = cast(pd.Interval, column_values[col])
+                val = column_values[col]
+                if isinstance(val, float) and np.isnan(val):
+                    raise Exception('nan (%s) is not supported to calculate baseline coverage!' % col)
+                val_bin: pd.Interval = cast(pd.Interval, val)
                 q01: float = self.column_info[col].q01
                 q99: float = self.column_info[col].q99
                 if val_bin.left < q01 or val_bin.right > q99:

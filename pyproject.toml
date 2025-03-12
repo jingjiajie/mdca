@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mdca"
+version = "0.1.15"
+dependencies = [
+    "bitarray==3.1.0",
+    "numpy==2.2.3",
+    "pandas==2.2.3",
+    "scipy==1.15.2",
+]
+requires-python = ">=3.8"
+authors = [
+  {name = "jingjiajie", email = "932166095@qq.com"}
+]
+maintainers = [
+  {name = "jingjiajie", email = "932166095@qq.com"},
+]
+description = "MDCA: Multi-dimensional Data Combination Analysis. It's used to analysis data table through multi-dimensional data combinations. Multi-dimensional distribution, fairness, and model error analysis are supported."
+readme = "README.md"
+#license = "MIT"
+#license-files = ["LICEN[CS]E.*"]
+keywords = ["multi-dimensional", "multidimensional", "distribution", "fairness", "model fairness", "error analysis", "model error", "model error analysis"]
+
+[project.urls]
+Homepage = "https://github.com/jingjiajie/mdca"
+Repository = "https://github.com/jingjiajie/mdca.git"
+"Bug Tracker" = "https://github.com/jingjiajie/mdca/issues"
+
+[project.scripts]
+mdca = "mdca:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

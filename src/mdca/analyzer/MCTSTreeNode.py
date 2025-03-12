@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index, IndexLocations
-from analyzer.ResultPath import ResultPath, ResultItem
-from analyzer.commons import calc_weight_fairness, Value, calc_weight_distribution, calc_weight_error
+from mdca.analyzer.Index import Index, IndexLocations
+from mdca.analyzer.ResultPath import ResultPath, ResultItem
+from mdca.analyzer.commons import calc_weight_fairness, Value, calc_weight_distribution, calc_weight_error
 
 if TYPE_CHECKING:
     from MCTSTree import MCTSTree
@@ -117,6 +117,9 @@ class MCTSTreeNode:
         for col in columns_after:
             value_dict: dict[Value | pd.Interval, IndexLocations] = self.tree._get_candidate_values_by_column(col)
             for val, val_loc in value_dict.items():
+                if self.tree.search_mode == 'distribution':
+                    if isinstance(val, float) and np.isnan(val):
+                        continue
                 if self.tree.min_count > 0:
                     fast_predict_count: bool | None = Index.fast_predict_bool_intersect_count(
                             [self.locations, val_loc])

@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from analyzer.Index import Index, IndexLocations
-from analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, calc_weight_error
+from mdca.analyzer.Index import Index, IndexLocations
+from mdca.analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, calc_weight_error
 
 
 class ResultItem:

@@ -4,7 +4,7 @@ import time
 import numpy as np
 import pandas as pd
 
-from analyzer.commons import Value, ColumnInfo
+from mdca.analyzer.commons import ColumnInfo
 
 BIN_NUMBER: int = 32  # avoid binning for date
 MIN_BIN_STEP: int = 1
