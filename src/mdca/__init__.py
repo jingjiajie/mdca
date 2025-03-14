@@ -58,7 +58,7 @@ mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05 --target-
 Fairness Analysis:
 mdca --data='path/to/data.csv' --mode=fairness --target-column=label --target-value=true --min-coverage=0.05
 
-Model Error Analysis
+Model Error Analysis:
 mdca --data='path/to/data.csv' --mode=error --target-column=label --prediction-column=label_pred --min-error-coverage=0.05
 """)
 
@@ -85,16 +85,16 @@ def main():
                         help='The column of model predicted label. Mandatory in error mode. '
                              'Omit in distribution, fairness mode.')
     parser.add_argument('-mc', "--min-coverage", dest='min_coverage', type=float,
-                        help='Minimum proportion of data combinations to analysis in the total data. '
+                        help='Minimum proportion of rows of analyzed value combinations in the total data. '
                              'Data combinations lower than this threshold will be ignored. '
                              'Default: %.2f in distribution, fairness mode, none in error mode.' % DEFAULT_MIN_COVERAGE)
     parser.add_argument('-mtc', "--min-target-coverage", dest='min_target_coverage', type=float,
-                        help='Minimum proportion of data combinations to analysis in the target data '
+                        help='Minimum proportion of rows of analyzed value combinations in the target data. '
                              '(value in target-column == target-value). '
                              'Data combinations lower than this threshold will be ignored. '
                              'Default: none.')
     parser.add_argument('-mec', "--min-error-coverage", dest='min_error_coverage', type=float,
-                        help='Minimum proportion of data combinations to analysis in the error data '
+                        help='Minimum proportion of rows of analyzed value combinations in the error data '
                              '(value in prediction-column != value in target-column). '
                              'Data combinations lower than this threshold will be ignored.'
                              'Default: %.2f in error mode.' % DEFAULT_MIN_ERROR_COVERAGE)
