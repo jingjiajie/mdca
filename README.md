@@ -2,7 +2,7 @@
 
 ## What's MDCA?
 
-MDCA analysis data table through multi-dimensional data combinations.
+MDCA analyzes multi-dimensional data combinations in data table.
 Multi-dimensional distribution, fairness, and model error analysis are supported.
 
 ### Multi-dimensional Distribution Analysis
@@ -37,8 +37,11 @@ pip install mdca
 ### Distribution Analysis
 
 ```bash
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
+# recommended
 mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05 --target-column=label --target-value=1  
+
+# for data tables doesn't have a label column
+mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
 ```
 
 ### Fairness Analysis
@@ -92,19 +95,31 @@ Data combinations lower than this threshold will be ignored. Default value can b
 
 ### Performing Distribution Analysis
 
-To perform _distribution analysis_, **_Min coverage_** is mandatory, without specifying a value, it uses a default value. The simplest command is:
-
-```bash
-mdca --data='path/to/data.csv' --mode=distribution
-# or
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
-```
-
+To perform _distribution analysis_, you need to specify a data table path (CSV is supported so far) and an analysis mode as "distribution".
 Meanwhile, **_Target column_** and **_Target value_** are recommended to specify if your data table has a target column.
 In this way, analyzer can give target related indicators with each distribution.
-
+The simplest command is:
 ```bash
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05 --target-column=label --target-value=1
+# recommended
+mdca --data='path/to/data.csv' --mode=distribution --target-column=label --target-value=1
+
+# for data tables doesn't have a label column
+mdca --data='path/to/data.csv' --mode=distribution
+
+```
+
+**_Min coverage_** is mandatory, but without specifying a value, it will use a default value described in --help.
+You can still manually specify arguments like min coverage, min target coverage:
+```bash
+# manually specify min coverage
+mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
+mdca --data='path/to/data.csv' --mode=distribution --min-target-coverage=0.05  
+```
+
+You can also specify columns you want to analysis:
+```bash
+# if you want to ensure column1, column2, column3 to be uniform distributed
+mdca --data='path/to/data.csv' --mode=distribution --column='column1, column2, column3'  
 ```
 
 After execution finished, you will get results like this:
