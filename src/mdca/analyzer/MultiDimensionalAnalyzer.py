@@ -50,16 +50,29 @@ class MultiDimensionalAnalyzer:
         else:
             raise Exception('search_mode must be fairness, distribution or error, actual: %s' % search_mode)
 
-        if columns is not None:
-            if target_column is not None and target_column not in columns:
-                columns.append(target_column)
-            if prediction_column is not None and prediction_column not in columns:
-                columns.append(prediction_column)
-            drop_cols: list[str] = []
+        if columns is None:
+            columns = []
             for col in data_df.columns:
-                if col not in columns:
-                    drop_cols.append(col)
-            data_df.drop(drop_cols, axis=1, inplace=True)
+                col: str
+                if col.startswith('Unnamed:'):
+                    continue
+                columns.append(col)
+
+        if target_column is not None and target_column not in columns:
+            columns.append(target_column)
+        if prediction_column is not None and prediction_column not in columns:
+            columns.append(prediction_column)
+
+        for col in columns:
+            if col not in data_df.columns:
+                raise Exception('Column (%s) not exist in data table. Existing columns: [%s]' %
+                                (col, ', '.join(data_df.columns)))
+
+        drop_cols: list[str] = []
+        for col in data_df.columns:
+            if col not in columns:
+                drop_cols.append(col)
+        data_df.drop(drop_cols, axis=1, inplace=True)
 
         if search_mode == 'error':
             data_df['__isError__'] = data_df[target_column] != data_df[prediction_column]

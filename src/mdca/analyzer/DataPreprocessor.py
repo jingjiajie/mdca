@@ -58,7 +58,7 @@ class DataPreprocessor:
                     np.count_nonzero(value_counts < min_count) == len(value_counts)):
                 too_few_value_count_columns.append(col_name)
         data_df.drop(too_few_value_count_columns, axis=1, inplace=True)
-        print(" - Ignored columns:", '[' + ', '.join(single_value_columns + too_few_value_count_columns) + ']')
+        print(" - Auto ignored columns:", '[' + ', '.join(single_value_columns + too_few_value_count_columns) + ']')
         print(" - Inferred column types: %s" %
               ", ".join(map(lambda item: "(%s: %s)" % (item[0], item[1]), column_types.items())))
         print(" - Binning columns: %s" %

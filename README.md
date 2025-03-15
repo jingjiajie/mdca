@@ -233,7 +233,7 @@ mdca --data='path/to/data.csv' --mode=error  --target-column=<name of label colu
 
 You can also specify columns you want to analysis:
 ```bash
-# if you want to ensure positive sample rate of combinations of column1, column2, column3 to be fair
+# if you want to analysis error rate deviations to combinations of column1, column2, column3
 mdca --data='path/to/data.csv' --mode=error --column='column1, column2, column3' --target-column=<name of label column> --prediction-column=<name of predicted label column>
 ```
 

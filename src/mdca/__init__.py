@@ -75,6 +75,9 @@ def main():
     parser.add_argument('-c', "--columns", dest='columns', type=str,
                         help='Optional. Columns to analysis in the data table. Example: "col1,col2,...". '
                              'Omit this argument means all columns')
+    parser.add_argument('-ic', "--ignore-columns", dest='ignore_columns', type=str,
+                        help='Optional. Ignore columns in the data table. Example: "col1,col2,...". '
+                             '--columns must not be specified when --ignore-columns is specified.')
     parser.add_argument('-tc', "--target-column", dest='target_column', type=str,
                         help='The column of data label. Mandatory in fairness, error mode. '
                              'Optional in distribution mode.')
@@ -202,16 +205,44 @@ def main():
     else:
         print('--mode (or -m) must be fairness, distribution or error, actual: %s' % mode)
 
-    columns_str: str = args.columns
-    columns: list[str] | None = None
-    if columns_str is not None and len(columns_str) > 0:
-        columns = columns_str.replace(' ', '').split(',')
+    if args.columns is not None and args.ignore_columns is not None:
+        print('--columns (or -c) and --ignore-columns (or -ic) can not be specified together.')
+        exit(1)
 
     print('Loading %s...' % data_path)
     load_data_start: float = time.time()
     # data_df: pd.DataFrame = pl.read_csv(data_path, encoding="utf8-lossy").to_pandas()
     data_df: pd.DataFrame = pd.read_csv(data_path, low_memory=False)
     print('Load data cost: %.2f seconds' % (time.time() - load_data_start))
+
+    columns_str: str | None = args.columns
+    columns: list[str] | None = None
+    if columns_str is not None and len(columns_str) > 0:
+        columns = columns_str.split(',')
+        columns = [c.strip() for c in columns]
+        for col in columns:
+            if col not in data_df.columns:
+                print('Column (%s) not exist in the data table. Existing columns: [%s]' %
+                      (col, ', '.join(data_df.columns)))
+                exit(1)
+
+    ignore_columns_str: str | None = args.ignore_columns
+    if ignore_columns_str is not None and len(ignore_columns_str) > 0:  # columns must be None
+        ignore_columns: list[str] = ignore_columns_str.split(',')
+        ignore_columns = [c.strip() for c in ignore_columns]
+        for col in ignore_columns:
+            if col not in data_df.columns:
+                print('Column (%s) not exist in the data table. Existing columns: [%s]' %
+                      (col, ', '.join(data_df.columns)))
+                exit(1)
+        columns = []
+        for col in data_df.columns:
+            col: str
+            if col in ignore_columns:
+                continue
+            elif col.startswith('Unnamed:'):
+                continue
+            columns.append(col)
 
     analyzer: MultiDimensionalAnalyzer = MultiDimensionalAnalyzer(data_df,
                                                                   search_mode=mode,
