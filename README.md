@@ -1,6 +1,6 @@
 # MDCA: Multi-dimensional Data Combination Analysis.
 
-## Languages 多语言:
+## Languages:
 #### [English Version](README.md)  ####
 #### [简体中文版本](README_zh.md)  ####
 
@@ -139,9 +139,10 @@ After execution finished, you will get results like this:
 
 In this result, there are three columns: **Coverage (Baseline, +N%, *X)**, **Target Rate(Overall +N%)**, and **Result**.  
 **Coverage** means the actual proportion of rows of the current result in the total data.  
-**Baseline** means the expected coverage of the current result. __(+N%, *X)__ means the actual coverage is how much and how many times higher than the baseline coverage.  
+**Baseline** means the expected coverage of the current result. __+N%, *X__ means the actual coverage is how much and how many times higher than the baseline coverage.  
+**Target Rate** means the rate of positive samples in the given value combination. **Result** is the given value combination.
 
-**Baseline** coverage is calculated by the following formula:
+The **Baseline** coverage mentioned above is calculated by the following formula:
 
 $$
 \vec{C} = (column1, column2, ..., columnN) ∈ Columns(Data Table)
@@ -151,12 +152,26 @@ $$
 Baseline Coverage(\vec{C}) = \frac{1}{Unique Value Combinations(\vec{C})}
 $$
 
-For example, there are two values of gender: *male*, *female*, and two values of nationality: *China*, *America*.
-The value combinations of $ \vec{C}=(gender, nationality) $ are: {*(male, China), (male, America), (female, China), (female, America)*}.
-So the $ Unique Value Combinations(\vec{C}) = 4 $, and $ Baseline Coverage(\vec{C}) = \frac{1}{4} = 0.25 $.
-This algorithm indicates that the Baseline Coverage is the proportion of rows of a value combination in case of all the data are ideally uniform distributed.
+For example, there are two values of gender: *male*, *female*, and two values of nationality: *China*, *America*. So the columns are:
 
-**Target Rate** means the rate of positive samples in the given value combination. **Result** is the given value combination.
+$$
+\vec{C}=(gender, nationality)
+$$
+
+And the value combinations are: {*(male, China), (male, America), (female, China), (female, America)*}.
+The length of unique value combinations is 4.
+
+$$
+Unique Value Combinations(\vec{C}) = 4
+$$
+
+And then the baseline coverage can be calculated:
+
+$$
+Baseline Coverage(\vec{C}) = \frac{1}{4} = 0.25
+$$
+
+This algorithm indicates that the Baseline Coverage is the proportion of rows of a value combination in case of all the data are ideally uniform distributed.
 
 ### Performing Fairness Analysis
 
@@ -241,4 +256,12 @@ In this result, there are three columns: **Error Coverage (Count)**, **Error Rat
 **Count** means the actual count of rows.  
 **Error Rate** means the rate of prediction errors in the data of the given value combination. 
 **(Overall +N%)** means how much higher the error rate is than the overall error rate in the total data table.  
-**Result** is the given value combination.  
+**Result** is the given value combination.
+
+## Issue Report & Help
+
+Please report any bugs, feature requests at: [https://github.com/jingjiajie/mdca/issues](https://github.com/jingjiajie/mdca/issues)  
+Maintainer will response as soon as possible.  
+
+If you need any help, please send email to author's mailbox: **932166095@qq.com** or contact WeChat: **18515221942**  
+Author will give you fast help as soon as possible.  
