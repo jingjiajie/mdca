@@ -26,7 +26,7 @@ class DataPreprocessor:
                 min_coverage: float | None) -> ProcessResult:
         print("Preprocessing data...")
         if min_coverage is None:
-            raise Exception('min_coverage must be specified!')
+            min_coverage = 0
         start: float = time.time()
         min_count: int = 0
         if min_coverage is not None:
