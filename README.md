@@ -1,70 +1,64 @@
-# MDCA: Multi-dimensional Data Combination Analysis.
+# MDCA: Multi-dimensional Data Combination Analysis
 
-## Languages:
-#### [English Version](README.md)  ####
-#### [简体中文版本](README_zh.md)  ####
+## Languages 多语言：
+#### [English Version](README_en.md)  ####
+#### [简体中文版本](README.md)  ####
 
-## What's MDCA?
+## 什么是MDCA?
 
-MDCA analyzes multi-dimensional data combinations in data table.
-Multi-dimensional distribution, fairness, and model error analysis are supported.
+MDCA（多维数据组合分析）对数据表中的多个维度的数据组合进行分析。支持多维分布分析、公平性分析和模型误差分析。
 
-### Multi-dimensional Distribution Analysis
+### 多维分布分析
 
-The distribution deviation of data may cause the prediction model to be biased towards majority classes and overfit minority classes, which affects the accuracy of the model.
-Even if the data distribution of different values for each column is uniform, combinations of values in multiple columns tend to be non-uniform.  
-**Multi-dimensional distribution analysis can quickly find the value combinations with deviated-from-baseline distributions.**
+数据的分布偏差可能会导致预测模型偏向于多数类，并对少数类产生过拟合，从而影响模型的准确性。即使每一列中不同值的分布是均匀的，多列值的组合往往也会呈现非均匀性。
+多维分布分析能够快速发现偏离基线分布的值组合。
 
-### Multi-dimensional Fairness Analysis
+### 多维公平性分析
 
-Data can be inherently biased. For example, gender, race, and nationality values may cause the model to make biased predictions,
-and it is not always feasible to simply remove columns that may be biased.
-Even if every column is fair, combination of multiple columns can be biased.  
-**Multi-dimensional fairness analysis can quickly find the value combinations with deviated-from-baseline positive rates as well as higher amounts.**
+数据本身可能带有偏见。例如，性别、种族和国籍等值可能会导致模型做出有偏见的预测，而且简单地移除可能带有偏见的列并不总是可行的。即使每一列都是公平的，多列的组合也可能产生偏见。
+多维公平性分析能够快速发现那些偏离基线正例率以及正例数量较高的值组合。
 
-Fairness detection in raw data sets is now supported, but Model fairness (eg. Equal Odds, Demographic Parity, etc.) is under development.
+目前支持对原始数据集进行公平性分析，但模型的公平性（如平等机会、人口统计均等性等）仍在开发中。
 
-### Multi-dimensional Model Error Analysis
+### 多维模型误差分析
 
-Model has different prediction accuracy for different value combinations.
-Finding the value combinations with higher prediction error rate is helpful to understand the error of model, so as to improve the data quality and improve model prediction accuracy.  
-**Multi-dimensional model error analysis can quickly find the value combinations with deviated-from-baseline prediction error rates as well as higher amounts in prediction error.**
+对于不同值组合，模型预测的准确性会有不同。找到预测错误率较高的值组合有助于了解模型的错误，从而可以提高数据质量，进而提高模型预测的准确性。
+多维模型误差分析能够快速发现那些偏离基线，预测错误率以及预测错误数量较高的值组合。
 
-## Installing
+## 安装
 
 ```bash
 pip install mdca
 ```
 
-## Typical usages
+## 典型用法
 
-### Distribution Analysis
+### 分布分析
 
 ```bash
-# recommended
+# 推荐用法
 mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05 --target-column=<name of label column> --target-value=<value of positive label>  
 
-# for data tables doesn't have a label column
+# 不指定目标列和目标值
 mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
 ```
 
-### Fairness Analysis
+### 公平性分析
 
 ```bash
 mdca --data='path/to/data.csv' --mode=fairness --target-column=<name of label column> --target-value=<value of positive label> --min-coverage=0.05  
 ```
 
-### Model Error Analysis
+### 模型误差分析
 
 ```bash
 mdca --data='path/to/data.csv' --mode=error --target-column=<name of label column> --prediction-column=<name of predicted label column> --min-error-coverage=0.05  
 ```
 
-## Concepts
+## 相关概念
 
-For a data table, there are multiple columns to describe multiple characteristics of objects.  
-If in some cases, the data is used to train classification models, there is also an _actual label_ column.  
-As well, for model prediction, there is also a _predicted label_ to store the prediction results of a model.
+对于一个数据表来说，它通常包含多个列，用于描述对象的多种特性。在某些情况下，当这些数据被用于训练分类模型时，会存在一个“实际标签”（actual label）列，该列记录了每个对象的真实类别。此外，在进行模型预测时，还会存在一个“预测标签”（predicted label）列，用于存储模型对每个对象的预测结果。
+
 
 | columnA | columnB | ... | columnX | actual label<br/>(optional) | predicted label<br/>(optional) |
 | ------- | ------- | --- | ------- | --------------------------- | ------------------------------ |
@@ -74,59 +68,53 @@ As well, for model prediction, there is also a _predicted label_ to store the pr
 | valueA4 | valueB4 | ... | valueX4 | 1                           | 1                              |
 | ...     | ...     | ... | ...     | ...                         | ...                            |
 
-With this kind of data table, MDCA uses the following concepts:
+对于这种类型的数据表，MDCA会使用以下概念：
 
-**Target column** (-tc or --target-column): The name of the actual label column. It's optional in **_distribution_** mode,
-but mandatory in **_fairness_** and **_error_** mode.
+**Target column** (-tc or --target-column)：目标列（通常是实际标签列）。 在 **_distribution_** （分布分析）模式下，实际标签列是可选的，但是在 **_fairness_** （公平性分析）和 **_error_** （误差分析）模式下，它是必需的。
 
-**Target value** (-tv or --target-value): The label value of positive sample in the target column.
-For example, _"1", "true"_ is often used for binary-classification, and for multi-classification,
-you can specify it as a target category you want to analysis, like "sport" for a news classification,
-or "rain" for a weather prediction.
+**Target value** (-tv or --target-value)：目标列中正样本的标签值，用于标识属于某一特定类别的样本。对于二元分类问题，常用的正样本标签值包括“1”、“true”，它们代表一个明确的类别；对于多分类问题，可以指定想要分析的任何一个目标类别，例如新闻分类的“体育”或者天气预报中的“雨天”都可以被指定为正样本的标签值。
 
-**Prediction column** (-pc or --prediction-column): The name of predicted label column. It's only available in **_error_** mode now.
+**Prediction column** (-pc or --prediction-column)：预测标签列。主要应用于 **_error_** （误差分析）模式，在这个模式下，我们需要对比模型的预测结果与实际结果，以评估模型性能。
 
-**Min coverage** (-mc or --min-coverage): Minimum proportion of rows of analyzed value combinations in the total data.
-Data combinations lower than this threshold will be ignored. Default value can be viewed using _mdca --help_
+**Min coverage** (-mc or --min-coverage)：在分析中被考虑的值组合在总数据中所占的最小行数比例。低于这个阈值的数据组合将被忽略。可以使用 _mdca --help_ 查看默认值
 
-**Min target coverage** (-mtc or --min-target-coverage): Minimum proportion of rows of analyzed value combinations in the target data (value in target-column == target-value).
-Data combinations lower than this threshold will be ignored. Default value can be viewed using _mdca --help_
+**Min target coverage** (-mtc or --min-target-coverage)：目标数据中（目标列中的值等于目标值）被分析的值组合所占行的最小比例。低于这个阈值的数据组合将被忽略。可以使用 _mdca --help_ 查看默认值
 
-**Min error coverage** (-mec or --min-error-coverage): Minimum proportion of rows of analyzed value combinations in the error data (value in prediction-column != value in target-column). Data combinations lower than this threshold will be ignored. Default value can be viewed using _mdca --help_
+**Min error coverage** (-mec or --min-error-coverage)：在误差数据中，被分析的值组合所占行的最小比例（即预测列中的值不等于目标列中的值）。低于这个阈值的数据组合将被忽略。可以使用 _mdca --help_ 查看默认值
 
-## Getting Started
+## 入门指南
 
-### Performing Distribution Analysis
+### 进行分布分析
 
-To perform _Distribution Analysis_, you need to specify a data table path (CSV is supported so far) and an analysis mode as "distribution".
-Meanwhile, **_Target column_** and **_Target value_** are recommended to specify if your data table has a target column.
-In this way, analyzer can give target related indicators with each distribution.  
-The simplest command is:
+要进行 _分布分析_ ，您需要指定一个数据表路径（目前支持CSV格式）并将分析模式设置为“distribution”（分布）。如果您的数据表包含目标列，则建议使用 **_target-column_** 和 **_target-value_** 两个参数指定目标列和目标值。这样，分析器可以为每个分布提供与目标相关的指标。
+快捷指令如下：
 ```bash
-# recommended
+# 推荐用法
 mdca --data='path/to/data.csv' --mode=distribution --target-column=<name of label column> --target-value=<value of positive label>
 
-# for data tables doesn't have a label column
+# 不指定目标列和目标值
 mdca --data='path/to/data.csv' --mode=distribution
+
 ```
 
-**_Min coverage_** is mandatory, but without specifying a value, it will use a default value described in --help.
-You can still manually specify arguments like min coverage, min target coverage:
+**_Min coverage_** 是必需的，但是如果您不指定具体值，则默认使用--help中描述的默认值。  
+你也可以手动指定参数，如最小覆盖率、最小目标覆盖率：
 ```bash
-# manually specify min coverage
+# 手动指定最小覆盖率/最小目标覆盖率
 mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
 mdca --data='path/to/data.csv' --mode=distribution --min-target-coverage=0.05  
 ```
 
-You can also specify columns you want to analysis:
+您还可以指定想要分析的某一列或某几列：
 ```bash
-# if you want to ensure column1, column2, column3 to be uniform distributed
+# 如果您希望确保column1、column2、column3是均匀分布的
 mdca --data='path/to/data.csv' --mode=distribution --column='column1, column2, column3'  
 ```
 
-After execution finished, you will get results like this:
+执行完成后，您将得到类似下面的结果：
 
 ========== Results of Coverage Increase ============
+
 
 | Coverage (Baseline, +N%, *X)     | Target Rate(Overall +%N) | Result                                                                                          |
 | -------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
@@ -137,12 +125,12 @@ After execution finished, you will get results like this:
 | 30.33% ( 4.17%, +26.16%, *7.28 ) | 26.30% ( -5.38%)         | [ind-debateclub=False, ind-international_exp=False, ind-entrepeneur_exp=False, ind-languages=1] |
 | ...                              | ...                      | ...                                                                                             |
 
-In this result, there are three columns: **Coverage (Baseline, +N%, *X)**, **Target Rate(Overall +N%)**, and **Result**.  
-**Coverage** means the actual proportion of rows of the current result in the total data.  
-**Baseline** means the expected coverage of the current result. __+N%, *X__ means the actual coverage is how much and how many times higher than the baseline coverage.  
-**Target Rate** means the rate of positive samples in the given value combination. **Result** is the given value combination.
+在这组结果中，包含以下三列： __Coverage (Baseline, +N%, *X)__ ， **Target Rate(Overall +N%)** ，和 **Result** 。  
+**Coverage** 指当前结果中的行数中的行数在总数据中所占的实际比例. （ **Baseline** 指当前结果的预期覆盖率。 __+N%, *X__ 指实际覆盖率是多少，以及比基线覆盖率高出多少倍。）    
+**Target Rate** 指在给定的值组合中，正样本的比率。  
+**Result** 指给定的值组合。
 
-The **Baseline** coverage mentioned above is calculated by the following formula:
+上面提到的 **Baseline** （基线）覆盖率是通过以下公式计算的：
 
 $$
 \vec{C} = (column1, column2, ..., columnN) ∈ Columns(Data Table)
@@ -152,49 +140,49 @@ $$
 Baseline Coverage(\vec{C}) = \frac{1}{Unique Value Combinations(\vec{C})}
 $$
 
-For example, there are two values of gender: *male*, *female*, and two values of nationality: *China*, *America*. So the columns are:
+举个例子，性别有两个值： *male*， *female*，国籍中也有两个值： *China*， *America*。 那么列可以是：
 
 $$
 \vec{C}=(gender, nationality)
 $$
 
-And the value combinations are: {*(male, China), (male, America), (female, China), (female, America)*}.
-The length of unique value combinations is 4.
+值组合有： {*(male, China)， (male, America)， (female, China)， (female, America)*}。
+唯一值组合的长度为4。
 
 $$
 Unique Value Combinations(\vec{C}) = 4
 $$
 
-And then the baseline coverage can be calculated:
+那么基线覆盖率按照如下公式进行计算：
 
 $$
 Baseline Coverage(\vec{C}) = \frac{1}{4} = 0.25
 $$
 
-This algorithm indicates that the Baseline Coverage is the proportion of rows of a value combination in case of all the data are ideally uniform distributed.
+该算法表明，基线覆盖率是指在所有数据理想均匀分布的情况下，某一值组合的行数所占的比例。
 
-### Performing Fairness Analysis
+### 进行公平性分析
 
-To perform _Fairness Analysis_, you need to specify a data table path (CSV is supported so far) and an analysis mode as "fairness".
-Meanwhile, **_Target column_** and **_Target value_** are mandatory, so that MDCA can analysis fairness of target rate to each value combination.  
-The simplest command is:
+要进行 _公平性分析_ ，您需要指定一个数据表路径（目前支持CSV格式）并将分析模式设置为“fairness”（公平性）。
+同时，需要使用 **_target-column_** 和 **_target-value_** 两个参数指定目标列和目标值，这两个参数是必需的，这样可以分析每个值组合对应的目标率的公平性。
+快捷指令如下：
 ```bash
 mdca --data='path/to/data.csv' --mode=fairness --target-column=<name of label column> --target-value=<value of positive label>
 ```
-**_Min coverage_** is mandatory, but without specifying a value, it will use a default value described in --help.
-You can still manually specify arguments like min coverage, min target coverage:
+**_Min coverage_** 是必需的，但您如果不指定具体值，默认使用--help中描述的默认值。  
+你也可以手动指定参数，如最小覆盖率、最小目标覆盖率：
 ```bash
 mdca --data='path/to/data.csv' --mode=fairness  --target-column=<name of label column> --target-value=<value of positive label> --min-coverage=0.05  
 mdca --data='path/to/data.csv' --mode=fairness  --target-column=<name of label column> --target-value=<value of positive label> --min-target-coverage=0.05  
 ```
 
-You can also specify columns you want to analysis:
+您还可以指定想要分析的某一列或某几列：
 ```bash
-# if you want to ensure positive sample rate of combinations of column1, column2, column3 to be fair
+# 如果您希望确保column1、column2和column3的组合的正样本率是公平的
 mdca --data='path/to/data.csv' --mode=fairness --column='column1, column2, column3' --target-column=<name of label column> --target-value=<value of positive label>  
 ```
 
-After execution finished, you will get results like this:
+执行完成后，您将得到类似下面的结果：
 
 ========== Results of Target Rate Increase ============
 
@@ -208,36 +196,34 @@ After execution finished, you will get results like this:
 | 5.92% (   237),  | 37.55% ( +5.88%),        | [gender=male, age=24]            |
 | ...              | ...                      | ...                              |
 
-In this result, there are three columns: **Coverage (Count)**, **Target Rate(Overall +N%)**, and **Result**.   
-**Coverage** means the actual proportion of rows of the current result in the total data.   
-**Count** means the actual count of rows.  
-**Target Rate** means the rate of positive samples in the data of the given value combination. 
-**(Overall +N%)** means how much higher the target rate is than the overall target rate in the total data table.  
-**Result** is the given value combination.  
+在这组结果中，包含以下三列： **Coverage (Count)**， **Target Rate(Overall +N%)**，和 **Result**。  
+**Coverage** 指在当前结果中，各组合所占的行数比例与总数据中各组合所占的比例应该是一致的。（**Count** 指实际的行数比例。）  
+**Target Rate** 指在给定的值组合数据中，正样本所占的比例。（ **(Overall +N%)** 指目标率相对于总数据表中整体目标率的偏离程度。）  
+**Result** 指给定的值组合数据。 
 
 
-### Performing Model Error Analysis
+### 进行模型误差分析
 
-To perform _Model Error Analysis_, you need to specify a data table path (CSV is supported so far) and an analysis mode as "error".
-Meanwhile, **_Target column_** and **_Prediction column_** are mandatory, so that MDCA can analysis error rate of each value combination.  
-The simplest command is:
+要进行 _模型误差分析_ ，您需要指定一个数据表路径（目前支持CSV格式）并将分析模式设置为“error”（误差）。
+同时，需要使用 **_target-column_** 和 **_target-value_** 两个参数指定目标列和目标值，这两个参数是必需的，这样可以分析每个值组合的错误率了。
+快捷指令如下：
 ```bash
 mdca --data='path/to/data.csv' --mode=error --target-column=<name of label column> --prediction-column=<name of predicted label column> 
 ```
-**_Min error coverage_** is mandatory, but without specifying a value, it will use a default value described in --help.
-You can still manually specify arguments like min coverage, min error coverage:
+**_Min error coverage_** 是必需的，但您如果不指定具体值，默认使用--help中描述的默认值。  
+你也可以手动指定参数，如最小覆盖率、最小目标覆盖率：
 ```bash
 mdca --data='path/to/data.csv' --mode=error  --target-column=<name of label column> --prediction-column=<name of predicted label column>  --min-coverage=0.05  
 mdca --data='path/to/data.csv' --mode=error  --target-column=<name of label column> --prediction-column=<name of predicted label column>  --min-error-coverage=0.05  
 ```
 
-You can also specify columns you want to analysis:
+您还可以指定想要分析的某一列或某几列：
 ```bash
-# if you want to analysis error rate deviations to combinations of column1, column2, column3
+# 如果您希望对column1、column2和column3的组合进行误差分析
 mdca --data='path/to/data.csv' --mode=error --column='column1, column2, column3' --target-column=<name of label column> --prediction-column=<name of predicted label column>
 ```
 
-After execution finished, you will get results like this:
+执行完成后，您将得到类似下面的结果：
 
 ========== Results of Error Rate Increase ============
 
@@ -251,17 +237,15 @@ After execution finished, you will get results like this:
 | 53.32% ( 21365)       | 28.40% ( +5.36%)       | [ficoRangeHigh=[664, 687)]                       |
 | ...                   | ...                    | ...                                              |
 
-In this result, there are three columns: **Error Coverage (Count)**, **Error Rate(Overall +N%)**, and **Result**.   
-**Error Coverage** means the actual proportion of rows of the current result in the prediction error data.   
-**Count** means the actual count of rows.  
-**Error Rate** means the rate of prediction errors in the data of the given value combination. 
-**(Overall +N%)** means how much higher the error rate is than the overall error rate in the total data table.  
-**Result** is the given value combination.
+在这组结果中，包含以下三列： **Error Coverage (Count)**, **Error Rate(Overall +N%)**，和 **Result**。  
+**Error Coverage** 指当前结果在预测错误数据中所占的实际行数比例。（**Count** 指实际行数。）  
+**Error Rate** 指在给定值组合的数据中预测错误的比率。（**(Overall +N%)** 指错误率比总数据表中的整体错误率高出了多少。）
+**Result** 指给定的值组合数据。 
 
-## Issue Report & Help
+## 问题报告 & 帮助
 
-Please report any bugs, feature requests at: [https://github.com/jingjiajie/mdca/issues](https://github.com/jingjiajie/mdca/issues)  
-Maintainer will response as soon as possible.  
+欢迎报告任何bug或功能需求至：[https://github.com/jingjiajie/mdca/issues](https://github.com/jingjiajie/mdca/issues)  
+管理员会尽快回复的。
 
-If you need any help, please send email to author's mailbox: **932166095@qq.com** or contact WeChat: **18515221942**  
-Author will give you fast help as soon as possible.  
+如果您需要任何帮助， 可以发送邮件至作者的邮箱： **932166095@qq.com** 或者添加微信： **18515221942**  
+作者会尽快给予快速帮助。 
