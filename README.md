@@ -95,9 +95,9 @@ Data combinations lower than this threshold will be ignored. Default value can b
 
 ### Performing Distribution Analysis
 
-To perform _distribution analysis_, you need to specify a data table path (CSV is supported so far) and an analysis mode as "distribution".
+To perform _Distribution Analysis_, you need to specify a data table path (CSV is supported so far) and an analysis mode as "distribution".
 Meanwhile, **_Target column_** and **_Target value_** are recommended to specify if your data table has a target column.
-In this way, analyzer can give target related indicators with each distribution.
+In this way, analyzer can give target related indicators with each distribution.  
 The simplest command is:
 ```bash
 # recommended
@@ -105,7 +105,6 @@ mdca --data='path/to/data.csv' --mode=distribution --target-column=label --targe
 
 # for data tables doesn't have a label column
 mdca --data='path/to/data.csv' --mode=distribution
-
 ```
 
 **_Min coverage_** is mandatory, but without specifying a value, it will use a default value described in --help.
@@ -126,7 +125,6 @@ After execution finished, you will get results like this:
 
 ========== Results of Coverage Increase ============
 
-
 | Coverage (Baseline, +N%, *X)     | Target Rate(Overall +%N) | Result                                                                                          |
 | -------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
 | 54.52% ( 8.33%, +46.19%, *6.54 ) | 25.95% ( -5.72%)         | [nationality=Dutch, ind-debateclub=False, ind-entrepeneur_exp=False]                            |
@@ -136,8 +134,9 @@ After execution finished, you will get results like this:
 | 30.33% ( 4.17%, +26.16%, *7.28 ) | 26.30% ( -5.38%)         | [ind-debateclub=False, ind-international_exp=False, ind-entrepeneur_exp=False, ind-languages=1] |
 | ...                              | ...                      | ...                                                                                             |
 
-In this result, there are three columns: **Coverage (Baseline, +N%, *X)**, **Target Rate(Overall +N%)**, and **Result**.
-**Coverage** means the actual proportion of rows of the current result in the total data. **Baseline** means the expected coverage of the current result. __+N%, *X__ means the actual coverage is how much and how many times higher than the baseline coverage.
+In this result, there are three columns: **Coverage (Baseline, +N%, *X)**, **Target Rate(Overall +N%)**, and **Result**.  
+**Coverage** means the actual proportion of rows of the current result in the total data.  
+**Baseline** means the expected coverage of the current result. __(+N%, *X)__ means the actual coverage is how much and how many times higher than the baseline coverage.  
 
 **Baseline** coverage is calculated by the following formula:
 
@@ -155,3 +154,46 @@ So the $ Unique Value Combinations(\vec{C}) = 4 $, and $ Baseline Coverage(\vec{
 This algorithm indicates that the Baseline Coverage is the proportion of rows of a value combination in case of all the data are ideally uniform distributed.
 
 **Target Rate** means the rate of positive samples in the given value combination. **Result** is the given value combination.
+
+### Performing Fairness Analysis
+
+To perform _Fairness Analysis_, you need to specify a data table path (CSV is supported so far) and an analysis mode as "distribution".
+Meanwhile, **_Target column_** and **_Target value_** are mandatory, so that MDCA can analysis fairness of target rate to each value combination.  
+The simplest command is:
+```bash
+mdca --data='path/to/data.csv' --mode=fairness --target-column=label --target-value=1
+```
+**_Min coverage_** is mandatory, but without specifying a value, it will use a default value described in --help.
+You can still manually specify arguments like min coverage, min target coverage:
+```bash
+# manually specify min coverage
+mdca --data='path/to/data.csv' --mode=fairness  --target-column=label --target-value=1 --min-coverage=0.05  
+mdca --data='path/to/data.csv' --mode=fairness  --target-column=label --target-value=1 --min-target-coverage=0.05  
+```
+
+You can also specify columns you want to analysis:
+```bash
+# if you want to ensure positive sample rate of combinations of column1, column2, column3 to be fair
+mdca --data='path/to/data.csv' --mode=fairness --column='column1, column2, column3' --target-column=label --target-value=1
+```
+
+After execution finished, you will get results like this:
+
+========== Results of Target Rate Increase ============
+
+| Coverage(Count), | Target Rate(Overall+N%), | Result                           |
+|------------------|--------------------------|----------------------------------|
+| 13.18% (   527), | 41.75% (+10.07%),        | [gender=male, sport=Rugby]       |
+| 5.33% (   213),  | 44.13% (+12.46%),        | [gender=male, age=29]            |
+| 7.22% (   289),  | 40.14% ( +8.46%),        | [age=30]                         |
+| 41.33% (  1653), | 35.63% ( +3.96%),        | [gender=male, nationality=Dutch] |
+| 15.72% (   629), | 36.09% ( +4.41%),        | [gender=male, sport=Football]    |
+| 5.92% (   237),  | 37.55% ( +5.88%),        | [gender=male, age=24]            |
+| ...              | ...                      | ...                              |
+
+In this result, there are three columns: **Coverage (Count)**, **Target Rate(Overall +N%)**, and **Result**.   
+**Coverage** means the actual proportion of rows of the current result in the total data.   
+**Count** means the actual count of rows.  
+**Target Rate** means the rate of positive samples in the given value combination. 
+**(Overall +N%)** means how much higher the target rate is than the overall target rate in the total data table.  
+**Result** is the given value combination.  
