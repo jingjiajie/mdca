@@ -164,10 +164,10 @@ class MultiDimensionalAnalyzer:
             result: ResultPath | None = tree.next_result()
             if result is None:
                 break
-            if self.search_mode in ['fairness', 'error']:
-                result = chi2_filter(result, self.search_mode)
-                if result is None:
-                    continue
+            # if self.search_mode in ['fairness', 'error']:
+            result = chi2_filter(result, self.search_mode)
+            if result is None:
+                continue
             calculated_res: CalculatedResult = result.calculate(self.data_index)
             if self.search_mode in ['fairness', 'error']:
                 if calculated_res.target_rate >= self.data_index.total_target_rate:
@@ -189,10 +189,10 @@ class MultiDimensionalAnalyzer:
                     result_cluster_set_dec.cluster_result(calculated_res)
         results: list[ResultPath] = result_cluster_set_inc.get_results() + result_cluster_set_dec.get_results()
         del tree
-        if self.search_mode in ['fairness', 'error']:
-            print("Clustering results (+Chi2-test) cost: %.2f seconds" % (time.time() - start_time))
-        elif self.search_mode == 'distribution':
-            print("Clustering results cost: %.2f seconds" % (time.time() - start_time))
+        # if self.search_mode in ['fairness', 'error']:
+        print("Clustering results (+Chi2-test) cost: %.2f seconds" % (time.time() - start_time))
+        # elif self.search_mode == 'distribution':
+        #     print("Clustering results cost: %.2f seconds" % (time.time() - start_time))
 
         merger: BinMerger = BinMerger(self.data_index, self.column_info, self.search_mode)
         results = merger.expand(results)
