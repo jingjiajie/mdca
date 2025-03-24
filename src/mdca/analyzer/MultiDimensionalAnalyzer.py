@@ -9,7 +9,7 @@ from mdca.analyzer.MCTSTree import MCTSTree
 from mdca.analyzer.ResultCluster import ResultClusterSet
 from mdca.analyzer.ResultPath import ResultPath, CalculatedResult
 from mdca.analyzer.DataPreprocessor import DataPreprocessor, ProcessResult
-from mdca.analyzer.chi2_filter import chi2_filter
+from mdca.analyzer.chi2_filter import chi2_filter, chi2_filter_distribution
 from mdca.analyzer.commons import Value, ColumnInfo
 
 BIN_NUMBER: int = 50
@@ -156,19 +156,33 @@ class MultiDimensionalAnalyzer:
         tree: MCTSTree | None = MCTSTree(self.data_index, self.column_info, self.target_column, self.target_value,
                                          self.search_mode, self.min_coverage, self.min_target_coverage)
         tree.run(mcts_rounds)
-
-        start_time: float = time.time()
+        print('Filtering results...')
+        chi2_cost: float = 0
+        cluster_cost: float = 0
         result_cluster_set_inc: ResultClusterSet = ResultClusterSet()
         result_cluster_set_dec: ResultClusterSet = ResultClusterSet()
+        existing_result_set: set[str] = set()
         while len(result_cluster_set_inc) < max_results or len(result_cluster_set_dec) < max_results:
             result: ResultPath | None = tree.next_result()
             if result is None:
                 break
-            # if self.search_mode in ['fairness', 'error']:
-            result = chi2_filter(result, self.search_mode)
-            if result is None:
-                continue
             calculated_res: CalculatedResult = result.calculate(self.data_index)
+
+            start_time: float = time.time()
+            if self.search_mode in ['fairness', 'error']:
+                calculated_res = chi2_filter(calculated_res, self.data_index, self.search_mode)
+            elif self.search_mode == 'distribution':
+                calculated_res = chi2_filter_distribution(calculated_res, self.data_index)
+            chi2_cost += time.time() - start_time
+
+            if calculated_res is None:
+                continue
+            elif str(calculated_res) in existing_result_set:
+                continue
+            else:
+                existing_result_set.add(str(calculated_res))
+
+            start_time = time.time()
             if self.search_mode in ['fairness', 'error']:
                 if calculated_res.target_rate >= self.data_index.total_target_rate:
                     if len(result_cluster_set_inc) >= max_results:
@@ -187,12 +201,11 @@ class MultiDimensionalAnalyzer:
                     if len(result_cluster_set_dec) >= max_results:
                         continue
                     result_cluster_set_dec.cluster_result(calculated_res)
+            cluster_cost += time.time() - start_time
         results: list[ResultPath] = result_cluster_set_inc.get_results() + result_cluster_set_dec.get_results()
         del tree
-        # if self.search_mode in ['fairness', 'error']:
-        print("Clustering results (+Chi2-test) cost: %.2f seconds" % (time.time() - start_time))
-        # elif self.search_mode == 'distribution':
-        #     print("Clustering results cost: %.2f seconds" % (time.time() - start_time))
+        print("Chi2 test cost: %.2f seconds" % chi2_cost)
+        print("Clustering results cost: %.2f seconds" % cluster_cost)
 
         merger: BinMerger = BinMerger(self.data_index, self.column_info, self.search_mode)
         results = merger.expand(results)

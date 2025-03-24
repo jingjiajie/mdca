@@ -18,6 +18,7 @@ class BinMerger:
         self.search_mode: str = search_mode
 
     def filter(self, results: list[ResultPath]):
+        print("Filtering bins...")
         start_time: float = time.time()
         filtered_results: list[ResultPath] = []
         for result_path in results:
@@ -44,6 +45,7 @@ class BinMerger:
         return filtered_results
 
     def merge(self, results: list[ResultPath]):
+        print("Merging bins...")
         start_time: float = time.time()
         result_groups: dict[str, list[ResultPath]] = {}
         # Grouping by column
@@ -152,6 +154,7 @@ class BinMerger:
         return final_results
 
     def expand(self, results: list[ResultPath]):
+        print("Expanding bins...")
         start_time: float = time.time()
         final_results: list[ResultPath] = []
         index: Index = self.data_index
