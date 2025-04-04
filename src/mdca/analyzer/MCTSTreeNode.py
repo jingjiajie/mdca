@@ -134,7 +134,7 @@ class MCTSTreeNode:
                         continue
                 child_loc: IndexLocations = self.locations & val_loc
                 child = MCTSTreeNode(self.tree, self, col, val, child_loc)
-                if child.count < self.tree.min_count:
+                if child.count == 0 or child.count < self.tree.min_count:
                     continue
                 elif self.tree.target_column is not None and child.target_count < self.tree.min_target_count:
                     continue
@@ -178,7 +178,7 @@ class MCTSTreeNode:
         return "[" + ", ".join(path) + "]"
 
     def pick(self):
-        if (len(self.children) == 0 or
+        if (self.children is None or len(self.children) == 0 or
                 all(map(lambda c: c.state == TreeNodeState.FULL_PICKED_STATE, self.children.values()))):
             self.state = TreeNodeState.FULL_PICKED_STATE
         else:
@@ -187,9 +187,10 @@ class MCTSTreeNode:
         cur: MCTSTreeNode = self
         while cur is not None:
             child_max_weight: float = 0
-            for child in cur.children.values():
-                if child.max_weight > child_max_weight:
-                    child_max_weight = child.max_weight
+            if cur.children is not None:
+                for child in cur.children.values():
+                    if child.max_weight > child_max_weight:
+                        child_max_weight = child.max_weight
             cur.max_weight = child_max_weight
             cur = cur.parent
 

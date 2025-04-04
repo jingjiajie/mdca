@@ -68,7 +68,6 @@ class ResultPath:
                                         calc_weight_distribution(0, 1, 1))
         count: int = self.locations.count
         coverage: float = count / index.total_count
-        baseline_coverage: float = index.get_column_combination_coverage_baseline(column_values)
         target_count: int = -1
         target_rate: float = -1
         target_coverage: float = -1
@@ -79,13 +78,14 @@ class ResultPath:
             target_rate = target_count / count
             target_coverage = target_count / total_target_count
         weight: float = -1
+        baseline_coverage: float = -1
         if self.search_mode == 'error':
             weight = calc_weight_error(len(self.items), target_coverage, target_rate, index.total_target_rate)
         elif self.search_mode == 'fairness':
             weight = calc_weight_fairness(len(self.items), coverage, target_rate, index.total_target_rate)
         elif self.search_mode == 'distribution':
             weight = calc_weight_distribution(len(self.items), coverage, baseline_coverage)
-
+            baseline_coverage = index.get_column_combination_coverage_baseline(column_values)
         return CalculatedResult(self, count, coverage, baseline_coverage, target_count, target_coverage,
                                 target_rate, weight)
 
