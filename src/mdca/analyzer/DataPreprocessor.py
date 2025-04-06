@@ -23,7 +23,7 @@ class DataPreprocessor:
         pass
 
     def process(self, data_df: pd.DataFrame, target_column: str | None,
-                min_coverage: float | None) -> ProcessResult:
+                min_coverage: float | None, no_binning: bool = False) -> ProcessResult:
         print("Preprocessing data...")
         if min_coverage is None:
             min_coverage = 0
@@ -43,8 +43,10 @@ class DataPreprocessor:
         column_binning: dict[str, bool] = {}
         for col_name in data_df.columns:
             col_type: str = column_types[col_name]
-            if (col_name != target_column and (col_type == 'float' or col_type == 'int')
-                    and len(data_df[col_name].unique()) > BIN_NUMBER):
+            column_binning[col_name] = False
+            if (not no_binning and
+                    (col_name != target_column and (col_type == 'float' or col_type == 'int') and
+                     len(data_df[col_name].unique()) > BIN_NUMBER)):
                 column_binning[col_name] = True
             else:
                 column_binning[col_name] = False

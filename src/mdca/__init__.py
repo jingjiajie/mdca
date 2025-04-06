@@ -105,7 +105,10 @@ def main():
                         help='Maximum number of output results. Default: %d' % DEFAULT_MAX_RESULTS)
     parser.add_argument('-sr', "--search-rounds", dest='search_rounds', type=int,
                         help='Maximum rounds of heuristic search. Default: %d' % DEFAULT_SEARCH_ROUNDS)
-
+    parser.add_argument('-nb', "--no-binning", dest='no_binning', action='store_true',
+                        help='No binning')
+    parser.add_argument('-o', "--output", dest='output', type=str,
+                        help='Output result to file')
     args = parser.parse_args()
 
     # Display help when no arguments specified
@@ -252,8 +255,11 @@ def main():
                                                                   prediction_column=args.prediction_column,
                                                                   min_coverage=args.min_coverage,
                                                                   min_target_coverage=args.min_target_coverage,
-                                                                  min_error_coverage=args.min_error_coverage)
+                                                                  min_error_coverage=args.min_error_coverage,
+                                                                  no_binning=args.no_binning)
 
     results: list[CalculatedResult] = analyzer.run(mcts_rounds=args.search_rounds, max_results=args.max_results)
     print("\nTotal time cost: %.2f seconds" % (time.time() - start))
     analyzer.print_results(results)
+    if args.output is not None:
+        analyzer.save_results(results, args.output)

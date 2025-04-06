@@ -13,6 +13,14 @@ class ResultItem:
         self.value: Value | pd.Interval = value
         self.locations: IndexLocations = locations
 
+    def to_json(self):
+        d: dict = dict(self.__dict__)
+        if isinstance(d['value'], float) and np.isnan(d['value']):
+            d['value'] = 'NaN'
+        del d['locations']
+        del d['column_type']
+        return d
+
     def __str__(self):
         return f"{self.column}={self._get_value_str()}"
 
@@ -32,6 +40,15 @@ class ResultPath:
         self.items: list[ResultItem] = items
         self.locations: IndexLocations = locations
         self.search_mode: str = search_mode
+
+    def to_json(self) -> dict:
+        d: dict = dict(self.__dict__)
+        item_dict_list: list[dict] = []
+        for item in self.items:
+            item_dict_list.append(item.to_json())
+        d['items'] = item_dict_list
+        del d['locations']
+        return d
 
     def __str__(self):
         item_str_list: list[str] = []
@@ -103,3 +120,4 @@ class CalculatedResult(ResultPath):
         self.target_rate: float = target_rate
         self.target_coverage: float = target_coverage
         self.weight: float = weight
+

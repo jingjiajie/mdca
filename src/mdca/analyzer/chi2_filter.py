@@ -113,6 +113,8 @@ def chi2_filter(result: CalculatedResult, index: Index, search_mode: str) -> Cal
     total_target_rate: float = index.total_target_rate
     is_inc: bool = result.target_rate >= total_target_rate
     filtered_items: list[ResultItem] = result.items
+    if 'gender=mock9' in str(result):
+        pass
     while True:
         filter_vector: np.ndarray = np.zeros(len(filtered_items), dtype=bool)
         item_loc_to_other_loc: list[(IndexLocations, IndexLocations)] = _calc_item_loc_to_other_loc(filtered_items)
@@ -124,7 +126,7 @@ def chi2_filter(result: CalculatedResult, index: Index, search_mode: str) -> Cal
             other_items_target_rate: float = other_items_target_loc.count / other_items_loc.count
             filtered_result_target_loc: IndexLocations = filtered_result_loc & total_target_loc
             filtered_result_target_rate: float = filtered_result_target_loc.count / filtered_result_loc.count
-            if ((is_inc and other_items_target_rate >= filtered_result_target_rate) or
+            if ((is_inc and other_items_target_rate > filtered_result_target_rate) or
                     (not is_inc and other_items_target_rate < filtered_result_target_rate)):
                 continue
             observed = [

@@ -1,3 +1,4 @@
+import json
 import time
 
 import numpy as np
@@ -29,7 +30,8 @@ class MultiDimensionalAnalyzer:
                  target_value: str | None = None,
                  min_coverage: float | None = None,
                  min_target_coverage: float | None = None,
-                 min_error_coverage: float | None = None):
+                 min_error_coverage: float | None = None,
+                 no_binning: bool = False):
         if search_mode == 'error':
             if target_column is None:
                 raise Exception('target_column must be specified for search_mode: error')
@@ -86,7 +88,7 @@ class MultiDimensionalAnalyzer:
         self.search_mode: str = search_mode
 
         preprocessor: DataPreprocessor = DataPreprocessor()
-        process_result: ProcessResult = preprocessor.process(data_df, target_column, min_coverage)
+        process_result: ProcessResult = preprocessor.process(data_df, target_column, min_coverage, no_binning=no_binning)
         self.column_info: dict[str, ColumnInfo] = process_result.column_info
         self.processed_data_df: pd.DataFrame = process_result.data_df
 
@@ -327,3 +329,13 @@ class MultiDimensionalAnalyzer:
             res_dec: list[CalculatedResult] = list(filter(lambda r: (r.coverage < r.baseline_coverage), results))
             res_dec = sorted(res_dec, key=lambda r: r.weight, reverse=True)
             _print_distribution_results(res_dec)
+
+    def save_results(self, results: list[CalculatedResult], file_path: str) -> None:
+        print('\nSaving results into: %s...' % file_path)
+        results = sorted(results, key=lambda r: r.weight, reverse=True)
+        result_dict_list: list[dict] = []
+        for res in results:
+            result_dict_list.append(res.to_json())
+        with open(file_path, "w") as json_file:
+            json.dump(result_dict_list, json_file)
+        print('Results saved into: %s' % file_path)
