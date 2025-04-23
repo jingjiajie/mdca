@@ -6,12 +6,7 @@
 
 ## 什么是MDCA?
 
-MDCA（多维数据组合分析）对数据表中的多个维度的数据组合进行分析。支持多维分布分析、公平性分析和模型误差分析。
-
-### 多维分布分析
-
-数据的分布偏差可能会导致预测模型偏向于多数类，并对少数类产生过拟合，从而影响模型的准确性。即使每一列中不同值的分布是均匀的，多列值的组合往往也会呈现非均匀性。
-多维分布分析能够快速发现偏离基线分布的值组合。
+MDCA（多维数据组合分析）对数据表中的多个维度的数据组合进行分析。支持多维公平性分析和模型误差分析。
 
 ### 多维公平性分析
 
@@ -32,16 +27,6 @@ pip install mdca
 ```
 
 ## 典型用法
-
-### 分布分析
-
-```bash
-# 推荐用法
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05 --target-column=<name of label column> --target-value=<value of positive label>  
-
-# 不指定目标列和目标值
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
-```
 
 ### 公平性分析
 
@@ -70,7 +55,7 @@ mdca --data='path/to/data.csv' --mode=error --target-column=<name of label colum
 
 对于这种类型的数据表，MDCA会使用以下概念：
 
-**Target column** (-tc or --target-column)：目标列（通常是实际标签列）。 在 **_distribution_** （分布分析）模式下，实际标签列是可选的，但是在 **_fairness_** （公平性分析）和 **_error_** （误差分析）模式下，它是必需的。
+**Target column** (-tc or --target-column)：目标列（通常是实际标签列），必填项。
 
 **Target value** (-tv or --target-value)：目标列中正样本的标签值，用于标识属于某一特定类别的样本。对于二元分类问题，常用的正样本标签值包括“1”、“true”，它们代表一个明确的类别；对于多分类问题，可以指定想要分析的任何一个目标类别，例如新闻分类的“体育”或者天气预报中的“雨天”都可以被指定为正样本的标签值。
 
@@ -83,83 +68,6 @@ mdca --data='path/to/data.csv' --mode=error --target-column=<name of label colum
 **Min error coverage** (-mec or --min-error-coverage)：在误差数据中，被分析的值组合所占行的最小比例（即预测列中的值不等于目标列中的值）。低于这个阈值的数据组合将被忽略。可以使用 _mdca --help_ 查看默认值
 
 ## 入门指南
-
-### 进行分布分析
-
-要进行 _分布分析_ ，您需要指定一个数据表路径（目前支持CSV格式）并将分析模式设置为“distribution”（分布）。如果您的数据表包含目标列，则建议使用 **_target-column_** 和 **_target-value_** 两个参数指定目标列和目标值。这样，分析器可以为每个分布提供与目标相关的指标。
-快捷指令如下：
-```bash
-# 推荐用法
-mdca --data='path/to/data.csv' --mode=distribution --target-column=<name of label column> --target-value=<value of positive label>
-
-# 不指定目标列和目标值
-mdca --data='path/to/data.csv' --mode=distribution
-
-```
-
-**_Min coverage_** 是必需的，但是如果您不指定具体值，则默认使用--help中描述的默认值。  
-你也可以手动指定参数，如最小覆盖率、最小目标覆盖率：
-```bash
-# 手动指定最小覆盖率/最小目标覆盖率
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05  
-mdca --data='path/to/data.csv' --mode=distribution --min-target-coverage=0.05  
-```
-
-您还可以指定想要分析的某一列或某几列：
-```bash
-# 如果您希望确保column1、column2、column3是均匀分布的
-mdca --data='path/to/data.csv' --mode=distribution --column='column1, column2, column3'  
-```
-
-执行完成后，您将得到类似下面的结果：
-
-========== Results of Coverage Increase ============
-
-
-| Coverage (Baseline, +N%, *X)     | Target Rate(Overall +%N) | Result                                                                                          |
-| -------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
-| 54.52% ( 8.33%, +46.19%, *6.54 ) | 25.95% ( -5.72%)         | [nationality=Dutch, ind-debateclub=False, ind-entrepeneur_exp=False]                            |
-| 62.00% (16.67%, +45.33%, *3.72 ) | 29.35% ( -2.32%)         | [nationality=Dutch, ind-international_exp=False]                                                |
-| 41.33% (11.11%, +30.21%, *3.72 ) | 35.63% ( +3.96%)         | [gender=male, nationality=Dutch]                                                                |
-| 39.40% (11.11%, +28.29%, *3.55 ) | 20.69% (-10.99%)         | [nationality=Dutch, ind-degree=bachelor]                                                        |
-| 30.33% ( 4.17%, +26.16%, *7.28 ) | 26.30% ( -5.38%)         | [ind-debateclub=False, ind-international_exp=False, ind-entrepeneur_exp=False, ind-languages=1] |
-| ...                              | ...                      | ...                                                                                             |
-
-在这组结果中，包含以下三列： __Coverage (Baseline, +N%, *X)__ ， **Target Rate(Overall +N%)** ，和 **Result** 。  
-**Coverage** 指当前结果中的行数中的行数在总数据中所占的实际比例. （ **Baseline** 指当前结果的预期覆盖率。 __+N%, *X__ 指实际覆盖率是多少，以及比基线覆盖率高出多少倍。）    
-**Target Rate** 指在给定的值组合中，正样本的比率。  
-**Result** 指给定的值组合。
-
-上面提到的 **Baseline** （基线）覆盖率是通过以下公式计算的：
-
-$$
-\vec{C} = (column1, column2, ..., columnN) ∈ Columns(Data Table)
-$$
-
-$$
-Baseline Coverage(\vec{C}) = \frac{1}{Unique Value Combinations(\vec{C})}
-$$
-
-举个例子，性别有两个值： *male*， *female*，国籍中也有两个值： *China*， *America*。 那么列可以是：
-
-$$
-\vec{C}=(gender, nationality)
-$$
-
-值组合有： {*(male, China)， (male, America)， (female, China)， (female, America)*}。
-唯一值组合的长度为4。
-
-$$
-Unique Value Combinations(\vec{C}) = 4
-$$
-
-那么基线覆盖率按照如下公式进行计算：
-
-$$
-Baseline Coverage(\vec{C}) = \frac{1}{4} = 0.25
-$$
-
-该算法表明，基线覆盖率是指在所有数据理想均匀分布的情况下，某一值组合的行数所占的比例。
 
 ### 进行公平性分析
 

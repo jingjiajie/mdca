@@ -17,15 +17,7 @@ def _print_help(parser: argparse.ArgumentParser):
  MDCA: Multi-dimensional Data Combination Analysis 
 ====================================================
 MDCA analysis data table through multi-dimensional data combinations.
-Multi-dimensional distribution, fairness, and model error analysis are supported.
-
-* Multi-dimensional Distribution Analysis *
-The distribution deviation of data may cause the prediction model to be biased
-towards majority classes and overfit minority classes, which affects the accuracy
-of the model. Even if the data distribution of different values for each column is
-uniform, combinations of values in multiple columns tend to be non-uniform.
-Multi-dimensional distribution analysis can quickly find the value combinations
-with deviated-from-baseline distributions.
+Multi-dimensional fairness, and model error analysis are supported.
 
 * Multi-dimensional Fairness Analysis *
 Data can be inherently biased. For example, gender, race, and nationality values
@@ -51,10 +43,6 @@ error.
     print("""
 Typical usages:
 
-Distribution Analysis:
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05
-mdca --data='path/to/data.csv' --mode=distribution --min-coverage=0.05 --target-column=label --target-value=1
-
 Fairness Analysis:
 mdca --data='path/to/data.csv' --mode=fairness --target-column=label --target-value=true --min-coverage=0.05
 
@@ -71,7 +59,7 @@ def main():
     parser.add_argument("-d", "--data", dest='data', type=str,
                         help="Path to data table file. Example: path/to/data.csv")
     parser.add_argument('-m', "--mode", dest='mode', type=str,
-                        help='Analysis mode. Must be distribution, fairness or error')
+                        help='Analysis mode. Must be fairness or error')
     parser.add_argument('-c', "--columns", dest='columns', type=str,
                         help='Optional. Columns to analysis in the data table. Example: "col1,col2,...". '
                              'Omit this argument means all columns')
@@ -79,18 +67,17 @@ def main():
                         help='Optional. Ignore columns in the data table. Example: "col1,col2,...". '
                              '--columns must not be specified when --ignore-columns is specified.')
     parser.add_argument('-tc', "--target-column", dest='target_column', type=str,
-                        help='The column of data label. Mandatory in fairness, error mode. '
-                             'Optional in distribution mode.')
+                        help='The column of data label. Mandatory.')
     parser.add_argument('-tv', "--target-value", dest='target_value', type=str,
                         help='The data label value of positive sample (usually True or 1 in binary classification). '
-                             'Mandatory in fairness mode. Omit in error mode. Optional in distribution mode.')
+                             'Mandatory in fairness mode. Omit in error mode.')
     parser.add_argument('-pc', "--prediction-column", dest='prediction_column', type=str,
                         help='The column of model predicted label. Mandatory in error mode. '
-                             'Omit in distribution, fairness mode.')
+                             'Omit in fairness mode.')
     parser.add_argument('-mc', "--min-coverage", dest='min_coverage', type=float,
                         help='Minimum proportion of rows of analyzed value combinations in the total data. '
                              'Data combinations lower than this threshold will be ignored. '
-                             'Default: %.2f in distribution, fairness mode, none in error mode.' % DEFAULT_MIN_COVERAGE)
+                             'Default: %.2f in fairness mode, none in error mode.' % DEFAULT_MIN_COVERAGE)
     parser.add_argument('-mtc', "--min-target-coverage", dest='min_target_coverage', type=float,
                         help='Minimum proportion of rows of analyzed value combinations in the target data. '
                              '(value in target-column == target-value). '
@@ -123,10 +110,7 @@ def main():
 
     # Fill default values
     mode: str = args.mode
-    if mode == 'distribution':
-        if args.min_coverage is None:
-            args.min_coverage = DEFAULT_MIN_COVERAGE
-    elif mode == 'fairness':
+    if mode == 'fairness':
         if args.min_coverage is None:
             args.min_coverage = DEFAULT_MIN_COVERAGE
     elif mode == 'error':
@@ -156,21 +140,6 @@ def main():
     if not data_path.endswith('.csv'):
         print('Currently only .csv data is supported! (actual: %s)' % data_path)
         exit(1)
-    if mode == 'distribution':
-        if args.prediction_column is not None:
-            print('--prediction-column (or -pc) should not be specified for search mode: distribution')
-            exit(1)
-        elif args.target_column is not None and args.target_value is None:
-            print('--target-value (or -tv) must be specified when --target-column (or -tc) is specified(%s) '
-                  'for search mode: distribution' % args.target_column)
-            exit(1)
-        elif args.min_error_coverage is not None:
-            print('--min-error-coverage (or -mec) should not be specified for search mode: distribution')
-            exit(1)
-        elif args.min_coverage is None and args.min_target_coverage is None:
-            print('At least one of --min-coverage (or -mc) or --min-target-coverage (or -mtc) must be specified'
-                  ' for mode: distribution')
-            exit(1)
     elif mode == 'fairness':
         if args.target_column is None:
             print('--target-column (or -tc) must be specified for search mode: fairness')
@@ -206,7 +175,7 @@ def main():
                   ' for mode: error')
             exit(1)
     else:
-        print('--mode (or -m) must be fairness, distribution or error, actual: %s' % mode)
+        print('--mode (or -m) must be fairness or error, actual: %s' % mode)
 
     if args.columns is not None and args.ignore_columns is not None:
         print('--columns (or -c) and --ignore-columns (or -ic) can not be specified together.')

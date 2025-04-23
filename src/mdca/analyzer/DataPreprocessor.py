@@ -1,4 +1,3 @@
-import math
 import time
 
 import numpy as np
@@ -6,8 +5,7 @@ import pandas as pd
 
 from mdca.analyzer.commons import ColumnInfo
 
-BIN_NUMBER: int = 32  # avoid binning for date
-MIN_BIN_STEP: int = 1
+BIN_NUMBER: int = 32
 
 
 class ProcessResult:
@@ -18,9 +16,6 @@ class ProcessResult:
 
 
 class DataPreprocessor:
-
-    def __init__(self):
-        pass
 
     def process(self, data_df: pd.DataFrame, target_column: str | None,
                 min_coverage: float | None, no_binning: bool = False) -> ProcessResult:
@@ -46,7 +41,7 @@ class DataPreprocessor:
             column_binning[col_name] = False
             if (not no_binning and
                     (col_name != target_column and (col_type == 'float' or col_type == 'int') and
-                     len(data_df[col_name].unique()) > BIN_NUMBER)):
+                     len(data_df[col_name].dropna().unique()) > BIN_NUMBER - 1)):
                 column_binning[col_name] = True
             else:
                 column_binning[col_name] = False
@@ -70,28 +65,14 @@ class DataPreprocessor:
               + ']'
               )
 
-        column_q00: dict[str, float] = {}
-        column_q01: dict[str, float] = {}
-        column_q99: dict[str, float] = {}
-        column_q100: dict[str, float] = {}
-        for col in data_df.columns:
-            if column_types[col] in ['int', 'float']:
-                [q00, q01, q99, q100] = data_df[col].quantile(q=[0, 0.01, 0.99, 1]).reset_index(drop=True)
-                column_q00[col] = q00
-                column_q01[col] = q01
-                column_q99[col] = q99
-                column_q100[col] = q100
-
         column_info: dict[str, ColumnInfo] = {}
         for col in data_df.columns:
-            info: ColumnInfo
-            if column_types[col] in ['int', 'float']:
-                info = ColumnInfo(col, column_types[col], column_binning[col], column_q00[col],
-                                  column_q01[col], column_q99[col], column_q100[col])
-            else:
-                info = ColumnInfo(col, column_types[col], column_binning[col], None, None, None, None)
+            info: ColumnInfo = ColumnInfo(col, column_types[col], column_binning[col])
+            if info.column_type in ['float', 'int']:
+                info.min = data_df[col].min()
+                info.max = data_df[col].max()
             column_info[col] = info
-        self._binning_inplace(data_df, column_info)
+        self._fill_cut_points(data_df, column_info)
         print("Preprocess data cost: %.2f seconds" % (time.time() - start))
         return ProcessResult(data_df, column_info)
 
@@ -192,29 +173,25 @@ class DataPreprocessor:
                 data_df.replace({col_name: {np.nan: None}}, inplace=True)
         return column_types
 
-    def _binning_inplace(self, data_df: pd.DataFrame, column_info: dict[str, ColumnInfo]):
+    # def _fill_cut_points(self, data_df: pd.DataFrame, column_info: dict[str, ColumnInfo]):
+    #     for col_name, col_info in column_info.items():
+    #         if not col_info.binning:
+    #             continue
+    #         [q01, q99] = data_df[col_name].quantile(q=[0.01, 0.99]).reset_index(drop=True)
+    #         step: float = (q99 - q01) / BIN_NUMBER
+    #         cut_points: list[float | int] = []
+    #         cur_cut_point: float | int = q01
+    #         while len(cut_points) < BIN_NUMBER - 1:
+    #             cur_cut_point += step
+    #             cut_points.append(cur_cut_point)
+    #         col_info.cut_points = cut_points
+    #     pass
+
+    def _fill_cut_points(self, data_df: pd.DataFrame, column_info: dict[str, ColumnInfo]):
         for col_name, col_info in column_info.items():
             if not col_info.binning:
                 continue
-            q00_int: int = math.floor(col_info.q00)
-            q01_int: int = math.floor(col_info.q01)
-            q99_int: int = math.ceil(col_info.q99)
-            q100_int: int = math.ceil(col_info.q100)
-            if col_info.q100 == q100_int:
-                q100_int += 1
-            step: float = (col_info.q99 - col_info.q01) / (BIN_NUMBER - 2)
-            if step < MIN_BIN_STEP:
-                step = MIN_BIN_STEP
-            bins: list[int] = []
-            if q00_int != q01_int:
-                bins.append(q00_int)
-            cur_bin: int = q01_int
-            while cur_bin <= q99_int:
-                if q99_int - cur_bin < MIN_BIN_STEP:
-                    bins.append(q99_int)
-                else:
-                    bins.append(math.floor(cur_bin))
-                cur_bin += step
-            if q100_int != q99_int:
-                bins.append(q100_int)
-            data_df[col_name] = pd.cut(data_df[col_name], bins=bins, include_lowest=True, right=False)
+            quantiles: np.ndarray = np.linspace(0.01, 0.99, BIN_NUMBER-1)
+            cut_points: list[float] = list(data_df[col_name].quantile(q=quantiles).reset_index(drop=True))
+            col_info.cut_points = cut_points
+

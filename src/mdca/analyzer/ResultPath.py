@@ -1,37 +1,69 @@
 import numpy as np
-import pandas as pd
 
 from mdca.analyzer.Index import Index, IndexLocations
-from mdca.analyzer.commons import Value, calc_weight_fairness, calc_weight_distribution, calc_weight_error
+from mdca.analyzer.commons import Value, calc_weight_fairness, calc_weight_error
+
+
+class BinResultValue:
+
+    def __init__(self, lower_cut_point_id: int | None, lower_cut_point_value: float | None,
+                 upper_cut_point_id: int | None, upper_cut_point_value: float | None):
+        self.lower_cut_point_id: int | None = lower_cut_point_id
+        self.lower_cut_point_value: float | None = lower_cut_point_value
+        self.upper_cut_point_id: int | None = upper_cut_point_id
+        self.upper_cut_point_value: float | None = upper_cut_point_value
+
+    def to_json(self):
+        d: dict = dict(self.__dict__)
+        return d
 
 
 class ResultItem:
 
-    def __init__(self, column: str, column_type: str, value: Value | pd.Interval, locations: IndexLocations):
+    def __init__(self, column: str, column_type: str, value: Value | BinResultValue, locations: IndexLocations):
         self.column: str = column
         self.column_type: str = column_type
-        self.value: Value | pd.Interval = value
+        self.value: Value = value
         self.locations: IndexLocations = locations
 
     def to_json(self):
         d: dict = dict(self.__dict__)
-        if isinstance(d['value'], float) and np.isnan(d['value']):
+        if isinstance(self.value, float) and np.isnan(self.value):
             d['value'] = 'NaN'
+        elif isinstance(self.value, BinResultValue):
+            d['value'] = self.value.to_json()
+        else:
+            d['value'] = self.value
         del d['locations']
         del d['column_type']
         return d
 
     def __str__(self):
-        return f"{self.column}={self._get_value_str()}"
+        if isinstance(self.value, BinResultValue):
+            if self.value.upper_cut_point_value is None:
+                return f"{self.column}>={self._get_value_str(self.column_type, self.value.lower_cut_point_value)}"
+            elif self.value.lower_cut_point_value is None:
+                return f"{self.column}<{self._get_value_str(self.column_type, self.value.upper_cut_point_value)}"
+            else:
+                return (f"{self._get_value_str(self.column_type, self.value.lower_cut_point_value)}<="
+                        f"{self.column}<"
+                        f"{self._get_value_str(self.column_type, self.value.upper_cut_point_value)}")
+        else:
+            return f"{self.column}={self._get_value_str(self.column_type, self.value)}"
 
     def __eq__(self, other: 'ResultItem'):
         return self.column == other.column and self.value == other.value
 
-    def _get_value_str(self) -> str:
-        if self.column_type == 'int':
-            if np.issubdtype(type(self.value), float) and not np.isnan(self.value):
-                return str(int(self.value))
-        return str(self.value)
+    @staticmethod
+    def _get_value_str(column_type: str, value: Value) -> str:
+        if np.issubdtype(type(value), float) and np.isnan(value):
+            return 'nan'
+        elif column_type == 'int':
+            return str(int(value))
+        elif column_type == 'float':
+            return '%.2f' % value
+        else:
+            return str(value)
 
 
 class ResultPath:
@@ -65,7 +97,7 @@ class ResultPath:
     def calculate(self, index: Index) -> 'CalculatedResult':
         if isinstance(self, CalculatedResult):
             return self
-        column_values: dict[str, Value | pd.Interval] = {}
+        column_values: dict[str, Value] = {}
         for item in self.items:
             column_values[item.column] = item.value
         if len(self.items) == 0:
@@ -79,17 +111,13 @@ class ResultPath:
                                         index.total_target_count, 1, index.total_target_rate,
                                         calc_weight_error(0, 1,
                                                           index.total_target_rate, index.total_target_rate))
-            elif self.search_mode == 'distribution':
-                return CalculatedResult(self, index.total_count, 1, 1,
-                                        index.total_target_count, 1, index.total_target_rate,
-                                        calc_weight_distribution(0, 1, 1))
         count: int = self.locations.count
         coverage: float = count / index.total_count
         target_count: int = -1
         target_rate: float = -1
         target_coverage: float = -1
         if index.target_column is not None:
-            total_target_loc: IndexLocations = index.get_locations(index.target_column, index.target_value)
+            total_target_loc: IndexLocations = index.get_categorical_locations(index.target_column, index.target_value)
             total_target_count: int = total_target_loc.count
             target_count = (self.locations & total_target_loc).count
             target_rate = target_count / count
@@ -100,9 +128,6 @@ class ResultPath:
             weight = calc_weight_error(len(self.items), target_coverage, target_rate, index.total_target_rate)
         elif self.search_mode == 'fairness':
             weight = calc_weight_fairness(len(self.items), coverage, target_rate, index.total_target_rate)
-        elif self.search_mode == 'distribution':
-            weight = calc_weight_distribution(len(self.items), coverage, baseline_coverage)
-            baseline_coverage = index.get_column_combination_coverage_baseline(column_values)
         return CalculatedResult(self, count, coverage, baseline_coverage, target_count, target_coverage,
                                 target_rate, weight)
 
@@ -120,4 +145,3 @@ class CalculatedResult(ResultPath):
         self.target_rate: float = target_rate
         self.target_coverage: float = target_coverage
         self.weight: float = weight
-

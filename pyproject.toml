@@ -18,7 +18,7 @@ authors = [
 maintainers = [
   {name = "jingjiajie", email = "932166095@qq.com"},
 ]
-description = "MDCA: Multi-dimensional Data Combination Analysis. It's used to analysis data table through multi-dimensional data combinations. Multi-dimensional distribution, fairness, and model error analysis are supported."
+description = "MDCA: Multi-dimensional Data Combination Analysis. It's used to analysis data table through multi-dimensional data combinations. Multi-dimensional fairness, and model error analysis are supported."
 readme = "README.md"
 #license = "MIT"
 #license-files = ["LICEN[CS]E.*"]
