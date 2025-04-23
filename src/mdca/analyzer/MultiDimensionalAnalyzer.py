@@ -1,16 +1,14 @@
-import json
 import time
 
 import numpy as np
 import pandas as pd
 
-from mdca.analyzer.BinMerger import BinMerger
 from mdca.analyzer.Index import Index
 from mdca.analyzer.MCTSTree import MCTSTree
 from mdca.analyzer.ResultCluster import ResultClusterSet
 from mdca.analyzer.ResultPath import ResultPath, CalculatedResult
 from mdca.analyzer.DataPreprocessor import DataPreprocessor, ProcessResult
-from mdca.analyzer.chi2_filter import chi2_filter, chi2_filter_distribution
+from mdca.analyzer.chi2_filter import chi2_filter
 from mdca.analyzer.commons import Value, ColumnInfo
 
 BIN_NUMBER: int = 50
@@ -46,11 +44,8 @@ class MultiDimensionalAnalyzer:
                 raise Exception('prediction_column is not yet supported for search_mode: fairness')
             elif target_value is None:
                 raise Exception('target_value must be specified for search_mode: fairness')
-        elif search_mode == 'distribution':
-            if prediction_column is not None:
-                raise Exception('prediction_column should not be specified for search_mode: distribution')
         else:
-            raise Exception('search_mode must be fairness, distribution or error, actual: %s' % search_mode)
+            raise Exception('search_mode must be fairness or error, actual: %s' % search_mode)
 
         if columns is None:
             columns = []
@@ -161,23 +156,21 @@ class MultiDimensionalAnalyzer:
         print('Filtering results...')
         chi2_cost: float = 0
         cluster_cost: float = 0
-        result_cluster_set_inc: ResultClusterSet = ResultClusterSet()
-        result_cluster_set_dec: ResultClusterSet = ResultClusterSet()
+        result_cluster_set: ResultClusterSet = ResultClusterSet()
         existing_result_set: set[str] = set()
-        while len(result_cluster_set_inc) < max_results or len(result_cluster_set_dec) < max_results:
+        while len(result_cluster_set) < max_results:
             result: ResultPath | None = tree.next_result()
             if result is None:
                 break
             calculated_res: CalculatedResult = result.calculate(self.data_index)
 
             start_time: float = time.time()
-            if self.search_mode in ['fairness', 'error']:
-                calculated_res = chi2_filter(calculated_res, self.data_index, self.search_mode)
-            elif self.search_mode == 'distribution':
-                calculated_res = chi2_filter_distribution(calculated_res, self.data_index)
+            calculated_res = chi2_filter(calculated_res, self.data_index, self.search_mode)
             chi2_cost += time.time() - start_time
 
             if calculated_res is None:
+                continue
+            elif calculated_res.weight <= 0:
                 continue
             elif str(calculated_res) in existing_result_set:
                 continue
@@ -185,34 +178,13 @@ class MultiDimensionalAnalyzer:
                 existing_result_set.add(str(calculated_res))
 
             start_time = time.time()
-            if self.search_mode in ['fairness', 'error']:
-                if calculated_res.target_rate >= self.data_index.total_target_rate:
-                    if len(result_cluster_set_inc) >= max_results:
-                        continue
-                    result_cluster_set_inc.cluster_result(calculated_res)
-                else:
-                    if len(result_cluster_set_dec) >= max_results:
-                        continue
-                    result_cluster_set_dec.cluster_result(calculated_res)
-            elif self.search_mode == 'distribution':
-                if calculated_res.coverage >= calculated_res.baseline_coverage:
-                    if len(result_cluster_set_inc) >= max_results:
-                        continue
-                    result_cluster_set_inc.cluster_result(calculated_res)
-                else:
-                    if len(result_cluster_set_dec) >= max_results:
-                        continue
-                    result_cluster_set_dec.cluster_result(calculated_res)
+            result_cluster_set.cluster_result(calculated_res)
             cluster_cost += time.time() - start_time
-        results: list[ResultPath] = result_cluster_set_inc.get_results() + result_cluster_set_dec.get_results()
+
+        results: list[ResultPath] = result_cluster_set.get_results()
         del tree
         print("Chi2 test cost: %.2f seconds" % chi2_cost)
         print("Clustering results cost: %.2f seconds" % cluster_cost)
-
-        merger: BinMerger = BinMerger(self.data_index, self.column_info, self.search_mode)
-        results = merger.expand(results)
-        results = merger.merge(results)
-        results = merger.filter(results)
 
         # remove duplicated results
         result_map: dict[str, ResultPath] = {}
@@ -248,14 +220,8 @@ class MultiDimensionalAnalyzer:
                           )
 
             print('\n========== Results of Target Rate Increase ============')
-            res_inc: list[CalculatedResult] = list(
-                filter(lambda r: (r.target_rate >= index.total_target_rate), results))
-            res_inc = sorted(res_inc, key=lambda r: r.weight, reverse=True)
-            _print_fairness_results(res_inc)
-            print('\n========== Results of Target Rate Decrease ============')
-            res_dec: list[CalculatedResult] = list(filter(lambda r: (r.target_rate < index.total_target_rate), results))
-            res_dec = sorted(res_dec, key=lambda r: r.weight, reverse=True)
-            _print_fairness_results(res_dec)
+            results = sorted(results, key=lambda r: r.weight, reverse=True)
+            _print_fairness_results(results)
 
         elif self.search_mode == 'error':
             print('\n========== Overall ============')
@@ -277,65 +243,16 @@ class MultiDimensionalAnalyzer:
                           )
 
             print('\n========== Results of Error Rate Increase ============')
-            res_inc: list[CalculatedResult] = list(
-                filter(lambda r: (r.target_rate >= index.total_target_rate), results))
-            res_inc = sorted(res_inc, key=lambda r: r.weight, reverse=True)
-            _print_fairness_results(res_inc)
-            print('\n========== Results of Error Rate Decrease ============')
-            res_dec: list[CalculatedResult] = list(filter(lambda r: (r.target_rate < index.total_target_rate), results))
-            res_dec = sorted(res_dec, key=lambda r: r.weight, reverse=True)
-            _print_fairness_results(res_dec)
+            results = sorted(results, key=lambda r: r.weight, reverse=True)
+            _print_fairness_results(results)
 
-        elif self.search_mode == 'distribution':
-            print('\n========== Overall ============')
-            print("Total rows: %d" % index.total_count)
-            if self.target_column is not None:
-                print("Overall target rate: %5.2f%%" % (index.total_target_rate * 100))
 
-            def _print_distribution_results(results: list[CalculatedResult]):
-                if self.target_column is not None:
-                    print('Coverage (Baseline, +N%, *X),\t\tTarget Rate(Overall +%N),\tResult')
-                    for res in results:
-                        coverage: float = res.coverage
-                        baseline_coverage: float = res.baseline_coverage
-                        target_rate: float = res.target_rate
-                        print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%5.2f%% (%+6.2f%%),\t\t%s" %
-                              (100 * coverage,
-                               100 * baseline_coverage,
-                               100 * (coverage - baseline_coverage),
-                               (coverage / baseline_coverage),
-                               100 * target_rate,
-                               100 * (target_rate - index.total_target_rate),
-                               str(res))
-                              )
-                else:
-                    print('Coverage (Baseline, +N%, *X),\t\tResult')
-                    for res in results:
-                        coverage: float = res.coverage
-                        baseline_coverage: float = res.baseline_coverage
-                        print("%5.2f%% (%5.2f%%, %+6.2f%%, *%-5.2f),\t%s" %
-                              (100 * coverage,
-                               100 * baseline_coverage,
-                               100 * (coverage - baseline_coverage),
-                               (coverage / baseline_coverage),
-                               str(res)))
-
-            print('\n========== Results of Coverage Increase ============')
-            res_inc: list[CalculatedResult] = list(filter(lambda r: (r.coverage >= r.baseline_coverage), results))
-            res_inc = sorted(res_inc, key=lambda r: r.weight, reverse=True)
-            _print_distribution_results(res_inc)
-
-            print('\n========== Results of Coverage Decrease ============')
-            res_dec: list[CalculatedResult] = list(filter(lambda r: (r.coverage < r.baseline_coverage), results))
-            res_dec = sorted(res_dec, key=lambda r: r.weight, reverse=True)
-            _print_distribution_results(res_dec)
-
-    def save_results(self, results: list[CalculatedResult], file_path: str) -> None:
-        print('\nSaving results into: %s...' % file_path)
-        results = sorted(results, key=lambda r: r.weight, reverse=True)
-        result_dict_list: list[dict] = []
-        for res in results:
-            result_dict_list.append(res.to_json())
-        with open(file_path, "w") as json_file:
-            json.dump(result_dict_list, json_file)
-        print('Results saved into: %s' % file_path)
+    # def save_results(self, results: list[CalculatedResult], file_path: str) -> None:
+    #     print('\nSaving results into: %s...' % file_path)
+    #     results = sorted(results, key=lambda r: r.weight, reverse=True)
+    #     result_dict_list: list[dict] = []
+    #     for res in results:
+    #         result_dict_list.append(res.to_json())
+    #     with open(file_path, "w") as json_file:
+    #         json.dump(result_dict_list, json_file)
+    #     print('Results saved into: %s' % file_path)
