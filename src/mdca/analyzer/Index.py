@@ -212,7 +212,10 @@ class Index:
             else:
                 col_index: dict[Value, list[int]] = {}
                 for val in data_df[col_name].unique():
-                    col_index[val] = []
+                    if issubclass(type(val), float) and np.isnan(val):
+                        col_index[np.nan] = []
+                    else:
+                        col_index[val] = []
 
                 for row_num in range(0, len(data_array)):
                     val: Value = data_array[row_num][col_pos]

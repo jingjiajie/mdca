@@ -164,7 +164,7 @@ class MultiDimensionalAnalyzer:
             calculated_res: CalculatedResult = result.calculate(self.data_index)
 
             start_time: float = time.time()
-            calculated_res = chi2_filter(calculated_res, self.data_index, self.search_mode)
+            # calculated_res = chi2_filter(calculated_res, self.data_index, self.search_mode)
             chi2_cost += time.time() - start_time
 
             if calculated_res is None:
@@ -182,7 +182,7 @@ class MultiDimensionalAnalyzer:
 
         results: list[ResultPath] = result_cluster_set.get_results()
         del tree
-        print("Chi2 test cost: %.2f seconds" % chi2_cost)
+        # print("Chi2 test cost: %.2f seconds" % chi2_cost)
         print("Clustering results cost: %.2f seconds" % cluster_cost)
 
         # remove duplicated results
