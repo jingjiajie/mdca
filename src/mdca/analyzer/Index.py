@@ -1,6 +1,6 @@
 import threading
 import time
-from typing import Iterable, cast
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -154,7 +154,7 @@ class Index:
         for col_name in data_df.columns:
             if not self.column_info[col_name].binning:
                 continue
-            print(' - Indexing %s, %d cut points' % (col_name, len(self.column_info[col_name].cut_points)))
+            print(' - Indexing %s, %d bins' % (col_name, len(self.column_info[col_name].cut_points) + 1))
 
             na_loc_bool: np.ndarray = data_df[col_name].isna()
             na_loc_bit: bitarray = bitarray(buffer=np.packbits(na_loc_bool).data)[:len(data_df)]
@@ -238,7 +238,6 @@ class Index:
     def get_columns_after(self, column: str | None):
         if column is None:
             return self.non_target_columns
-        # TODO 二分查找
         pos = self.non_target_columns.index(column)
         if pos == len(self.non_target_columns) - 1:
             return []
@@ -260,50 +259,6 @@ class Index:
                 return self._cut_point_index[column].cut_point_locations[cut_point_id].gte_locations
             else:
                 return self._cut_point_index[column].cut_point_locations[cut_point_id].lt_locations
-
-    # def get_column_combination_coverage_baseline(self, column_values: dict[str, Value]) -> float:
-    #     if len(column_values) == 0:
-    #         return 1
-    #     categorical_columns: list[str] = []
-    #     continuous_columns: list[str] = []
-    #     for col in column_values.keys():
-    #         if self.column_info[col].binning:
-    #             continuous_columns.append(col)
-    #         else:
-    #             categorical_columns.append(col)
-    #     baseline_coverage: float = 1
-    #     if len(categorical_columns) > 0:
-    #         cache_key = ','.join(categorical_columns)
-    #         categorical_baseline_coverage: float
-    #         if cache_key in self._baseline_coverage_cache:
-    #             categorical_baseline_coverage = self._baseline_coverage_cache[cache_key]
-    #         else:
-    #             categorical_unique_combinations: pd.Series = (
-    #                 self.data_df[categorical_columns].drop_duplicates().dropna(ignore_index=True))
-    #             categorical_baseline_coverage: float = 1 / len(categorical_unique_combinations)
-    #             self._baseline_coverage_cache[cache_key] = categorical_baseline_coverage
-    #         baseline_coverage *= categorical_baseline_coverage
-    #     if len(continuous_columns) > 0:
-    #         outer_hypercube_volume: float = 1
-    #         inner_hypercube_volume: float = 1
-    #         for col in continuous_columns:
-    #             val = column_values[col]
-    #             if isinstance(val, float) and np.isnan(val):
-    #                 raise Exception('nan (%s) is not supported to calculate baseline coverage!' % col)
-    #             val_bin: pd.Interval = cast(pd.Interval, val)
-    #             q01: float = self.column_info[col].q01
-    #             q99: float = self.column_info[col].q99
-    #             if val_bin.left < q01 or val_bin.right > q99:
-    #                 raise Exception('Column value must be between q01 and q99 (%.2f, %.2f), actual: (%.2f, %.2f)' %
-    #                                 (q01, q99, val_bin.left, val_bin.right))
-    #             length: float = q99 - q01
-    #             left_normalized: float = val_bin.left / length
-    #             right_normalized: float = val_bin.right / length
-    #             outer_hypercube_volume *= right_normalized
-    #             inner_hypercube_volume *= left_normalized
-    #         continuous_baseline_coverage: float = outer_hypercube_volume - inner_hypercube_volume
-    #         baseline_coverage *= continuous_baseline_coverage
-    #     return baseline_coverage
 
     @staticmethod
     def fast_predict_bool_intersect_count(loc_list: list['IndexLocations']) -> int | None:

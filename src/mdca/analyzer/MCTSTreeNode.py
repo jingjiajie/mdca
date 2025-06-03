@@ -164,7 +164,10 @@ class MCTSTreeNode:
             for col in all_columns:
                 if not self.tree.column_info[col].binning:
                     categorical_columns.append(col)
-            candidate_columns = categorical_columns
+            if len(categorical_columns) > 0:
+                candidate_columns = categorical_columns
+            else:
+                candidate_columns = all_columns
         elif self.is_cut_point:
             if self._is_invalid_cut_range():
                 candidate_columns = [self.column]

@@ -16,8 +16,6 @@ class ColumnInfo:
 def calc_weight_error(dimensions: int, error_coverage: float, error_rate: float, total_error_rate: float) -> float:
     ALPHA: float = 1
     BETA: float = 1 / 2
-    # BETA: float = 1
-    # GAMMA: float = 3 / 2
     GAMMA: float = 2
     if error_rate < total_error_rate:
         return 0
@@ -27,7 +25,7 @@ def calc_weight_error(dimensions: int, error_coverage: float, error_rate: float,
 def calc_weight_fairness(dimensions: int, coverage: float, target_rate: float, total_target_rate: float) -> float:
     ALPHA: float = 1
     BETA: float = 1 / 2
-    GAMMA: float = 3 / 2
+    GAMMA: float = 2
     if target_rate < total_target_rate:
         return 0
     return ALPHA**-(dimensions-1) * coverage**BETA * abs(target_rate - total_target_rate)**GAMMA

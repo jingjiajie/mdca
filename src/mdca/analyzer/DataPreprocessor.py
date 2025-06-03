@@ -26,12 +26,6 @@ class DataPreprocessor:
         min_count: int = 0
         if min_coverage is not None:
             min_count = int(len(data_df) * min_coverage)
-        single_value_columns: list[str] = []
-        for col_name in data_df.columns:
-            unique_values: np.ndarray = data_df[col_name].unique()
-            if len(unique_values) == 1:
-                single_value_columns.append(col_name)
-        data_df.drop(single_value_columns, axis=1, inplace=True)
 
         column_types: dict[str, str] = self._infer_and_clean_data_inplace(data_df, data_df.columns)
 
@@ -46,24 +40,27 @@ class DataPreprocessor:
             else:
                 column_binning[col_name] = False
 
-        too_few_value_count_columns: list[str] = []
+        ignore_columns: list[str] = []
         for col_name in data_df.columns:
             if column_binning[col_name]:
                 continue
-            value_counts: pd.Series = data_df[col_name].value_counts()
-            if (len(value_counts) == len(data_df) or
-                    np.count_nonzero(value_counts < min_count) == len(value_counts)):
-                too_few_value_count_columns.append(col_name)
-        data_df.drop(too_few_value_count_columns, axis=1, inplace=True)
-        print(" - Auto ignored columns:", '[' + ', '.join(single_value_columns + too_few_value_count_columns) + ']')
-        print(" - Inferred column types: %s" %
-              ", ".join(map(lambda item: "(%s: %s)" % (item[0], item[1]), column_types.items())))
-        print(" - Binning columns: %s" %
-              '[' +
-              ', '.join(map(lambda item: item[0],
-                            filter(lambda item: item[1], column_binning.items())))
-              + ']'
-              )
+            value_counts: pd.Series = data_df[col_name].value_counts(dropna=False)
+            if len(value_counts) == 1:
+                ignore_columns.append(col_name)
+                print(" - Ignored column %s: Only one value (%s)" % (col_name, str(value_counts.index[0])))
+            elif len(value_counts) == len(data_df):
+                ignore_columns.append(col_name)
+                print(" - Ignored column %s: Each row has a different value" % col_name)
+            elif np.count_nonzero(value_counts < min_count) == len(value_counts):
+                ignore_columns.append(col_name)
+                print(" - Ignored column %s: No value meets the minimum coverage" % col_name)
+        data_df.drop(ignore_columns, axis=1, inplace=True)
+        print(" - Inferred column types:")
+        for col, col_type in column_types.items():
+            if column_binning[col]:
+                print('  - %s: %s (binning)' % (col, col_type))
+            else:
+                print('  - %s: %s' % (col, col_type))
 
         column_info: dict[str, ColumnInfo] = {}
         for col in data_df.columns:

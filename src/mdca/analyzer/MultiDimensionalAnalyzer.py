@@ -9,7 +9,6 @@ from mdca.analyzer.MCTSTree import MCTSTree
 from mdca.analyzer.ResultCluster import ResultClusterSet
 from mdca.analyzer.ResultPath import ResultPath, CalculatedResult, BinResultValue
 from mdca.analyzer.DataPreprocessor import DataPreprocessor, ProcessResult
-from mdca.analyzer.chi2_filter import chi2_filter
 from mdca.analyzer.commons import Value, ColumnInfo
 
 MAX_CUT_RANGE_COVERAGE: float = 0.6
@@ -157,47 +156,28 @@ class MultiDimensionalAnalyzer:
                                          self.search_mode, self.min_coverage, self.min_target_coverage,
                                          self.min_target_rate)
         tree.run(mcts_rounds)
-        print('Filtering results...')
-        chi2_cost: float = 0
+        print('Clustering results...')
         cluster_cost: float = 0
         result_cluster_set: ResultClusterSet = ResultClusterSet(self.column_info)
-        existing_result_set: set[str] = set()
         while len(result_cluster_set) < max_results:
             result: ResultPath | None = tree.next_result()
             if result is None:
                 break
             calculated_res: CalculatedResult = result.calculate(self.data_index)
 
-            start_time: float = time.time()
-            # calculated_res = chi2_filter(calculated_res, self.data_index, self.search_mode)
-            chi2_cost += time.time() - start_time
-
             if calculated_res is None:
                 continue
-            elif calculated_res.weight <= 0:
+            elif calculated_res.weight == 0:
                 continue
-            elif str(calculated_res) in existing_result_set:
-                continue
-            else:
-                existing_result_set.add(str(calculated_res))
 
-            start_time = time.time()
+            start_time: float = time.time()
             result_cluster_set.cluster_result(calculated_res)
             cluster_cost += time.time() - start_time
 
         results: list[ResultPath] = result_cluster_set.get_results()
         del tree
-        # print("Chi2 test cost: %.2f seconds" % chi2_cost)
-        print("Clustering results cost: %.2f seconds" % cluster_cost)
 
-        # remove duplicated results
-        result_map: dict[str, ResultPath] = {}
-        for res in results:
-            if len(res.items) == 0:
-                continue
-            if str(res) not in result_map:
-                result_map[str(res)] = res
-        results = list(result_map.values())
+        print("Clustering results cost: %.2f seconds" % cluster_cost)
         calculated_results: list[CalculatedResult] = list(map(lambda r: r.calculate(self.data_index), results))
         calculated_results = sorted(calculated_results, key=lambda r: r.weight, reverse=True)
         return calculated_results
