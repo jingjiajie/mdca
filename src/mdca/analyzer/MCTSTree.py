@@ -11,7 +11,7 @@ class MCTSTree:
 
     def __init__(self, data_index: Index, column_info: dict[str, ColumnInfo], target_column: str,
                  target_value: Value | None, search_mode: str,
-                 min_coverage: float | None, min_target_coverage: float | None):
+                 min_coverage: float | None, min_target_coverage: float | None, min_target_rate: float | None):
         if min_coverage is None and min_target_coverage is None:
             raise Exception('At least one of min_coverage or min_target_coverage must be specified!')
         self.data_index: Index = data_index
@@ -29,6 +29,9 @@ class MCTSTree:
             self.min_count = int(data_index.total_count * self.min_coverage)
         if min_target_coverage is not None:
             self.min_target_count = int(data_index.total_target_count * min_target_coverage)
+        self.min_target_rate: float = 0
+        if min_target_rate is not None:
+            self.min_target_rate = min_target_rate
 
         self._categorical_column_values_candidate: dict[str, dict[Value, IndexLocations]] = {}
         for col in data_index.get_columns_after(None):

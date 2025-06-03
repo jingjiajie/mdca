@@ -389,6 +389,8 @@ class MCTSTreeNode:
             return False
         elif self.tree.target_column is not None and child.target_count < self.tree.min_target_count:
             return False
+        elif self.tree.min_target_rate > 0 and child.target_rate < self.tree.min_target_rate:
+            return False
 
         is_derived_child: bool = child.derived_from is not None
         if is_derived_child and child.visit_state == TreeNodeVisitState.NOT_VISITED:

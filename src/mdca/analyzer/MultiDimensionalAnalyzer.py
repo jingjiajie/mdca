@@ -26,7 +26,9 @@ class MultiDimensionalAnalyzer:
                  target_value: str | None = None,
                  min_coverage: float | None = None,
                  min_target_coverage: float | None = None,
+                 min_target_rate: float | None = None,
                  min_error_coverage: float | None = None,
+                 min_error_rate: float | None = None,
                  no_binning: bool = False):
         if search_mode == 'error':
             if target_column is None:
@@ -75,9 +77,11 @@ class MultiDimensionalAnalyzer:
             target_column = '__isError__'
             target_value = 'True'
             min_target_coverage = min_error_coverage
+            min_target_rate = min_error_rate
 
         self.min_coverage: float | None = min_coverage
         self.min_target_coverage: float | None = min_target_coverage
+        self.min_target_rate: float | None = min_target_rate
         self.search_mode: str = search_mode
 
         preprocessor: DataPreprocessor = DataPreprocessor()
@@ -150,7 +154,8 @@ class MultiDimensionalAnalyzer:
 
     def run(self, mcts_rounds: int = 100000, max_results: int = 20) -> list[CalculatedResult]:
         tree: MCTSTree | None = MCTSTree(self.data_index, self.column_info, self.target_column, self.target_value,
-                                         self.search_mode, self.min_coverage, self.min_target_coverage)
+                                         self.search_mode, self.min_coverage, self.min_target_coverage,
+                                         self.min_target_rate)
         tree.run(mcts_rounds)
         print('Filtering results...')
         chi2_cost: float = 0

@@ -6,7 +6,7 @@ import pandas as pd
 from mdca.analyzer.MultiDimensionalAnalyzer import MultiDimensionalAnalyzer
 from mdca.analyzer.ResultPath import CalculatedResult
 
-DEFAULT_MIN_COVERAGE: float = 0.05
+DEFAULT_MIN_COVERAGE_FAIRNESS: float = 0.05
 DEFAULT_MIN_ERROR_COVERAGE: float = 0.05
 DEFAULT_MAX_RESULTS: int = 20
 DEFAULT_SEARCH_ROUNDS: int = 100000
@@ -77,17 +77,25 @@ def main():
     parser.add_argument('-mc', "--min-coverage", dest='min_coverage', type=float,
                         help='Minimum proportion of rows of analyzed value combinations in the total data. '
                              'Data combinations lower than this threshold will be ignored. '
-                             'Default: %.2f in fairness mode, none in error mode.' % DEFAULT_MIN_COVERAGE)
+                             'Default: %.2f in fairness mode, 0 in error mode.' % DEFAULT_MIN_COVERAGE_FAIRNESS)
     parser.add_argument('-mtc', "--min-target-coverage", dest='min_target_coverage', type=float,
                         help='Minimum proportion of rows of analyzed value combinations in the target data. '
                              '(value in target-column == target-value). '
                              'Data combinations lower than this threshold will be ignored. '
-                             'Default: none.')
+                             'Default: 0')
+    parser.add_argument('-mtr', "--min-target-rate", dest='min_target_rate', type=float,
+                        help='Minimum target rate of analyzed value combinations in the target data. '
+                             'Data combinations lower than this threshold will be ignored. '
+                             'Default: 0')
     parser.add_argument('-mec', "--min-error-coverage", dest='min_error_coverage', type=float,
                         help='Minimum proportion of rows of analyzed value combinations in the error data '
                              '(value in prediction-column != value in target-column). '
                              'Data combinations lower than this threshold will be ignored.'
                              'Default: %.2f in error mode.' % DEFAULT_MIN_ERROR_COVERAGE)
+    parser.add_argument('-mer', "--min-error-rate", dest='min_error_rate', type=float,
+                        help='Minimum error rate of analyzed value combinations in the error data '
+                             'Data combinations lower than this threshold will be ignored.'
+                             'Default: 0')
     parser.add_argument('-mr', "--max-results", dest='max_results', type=int,
                         help='Maximum number of output results. Default: %d' % DEFAULT_MAX_RESULTS)
     parser.add_argument('-sr', "--search-rounds", dest='search_rounds', type=int,
@@ -112,7 +120,7 @@ def main():
     mode: str = args.mode
     if mode == 'fairness':
         if args.min_coverage is None:
-            args.min_coverage = DEFAULT_MIN_COVERAGE
+            args.min_coverage = DEFAULT_MIN_COVERAGE_FAIRNESS
     elif mode == 'error':
         if args.min_error_coverage is None:
             args.min_error_coverage = DEFAULT_MIN_ERROR_COVERAGE
@@ -224,7 +232,9 @@ def main():
                                                                   prediction_column=args.prediction_column,
                                                                   min_coverage=args.min_coverage,
                                                                   min_target_coverage=args.min_target_coverage,
+                                                                  min_target_rate=args.min_target_rate,
                                                                   min_error_coverage=args.min_error_coverage,
+                                                                  min_error_rate=args.min_error_rate,
                                                                   no_binning=args.no_binning)
 
     results: list[CalculatedResult] = analyzer.run(mcts_rounds=args.search_rounds, max_results=args.max_results)
