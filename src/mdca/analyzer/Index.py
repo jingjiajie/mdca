@@ -8,10 +8,10 @@ from bitarray import bitarray
 
 from mdca.analyzer.commons import Value, ColumnInfo
 
-BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD: int = 10000
-BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE: float = 0.01
+# BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD: int = 10000
+# BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE: float = 0.01
 
-_thread_local: threading.local = threading.local()
+# _thread_local: threading.local = threading.local()
 
 
 class IndexLocations:
@@ -20,18 +20,18 @@ class IndexLocations:
         self._locations = locations
         self.index_length = len(locations)
 
-        sample_step: int = int(1 / BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE)
-        self._sampled_locations: bitarray
-        if self.index_length < BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD:
-            self._sampled_locations = locations
-        else:
-            self._sampled_locations = locations[sample_step - 1::sample_step]
+        # sample_step: int = int(1 / BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE)
+        # self._sampled_locations: bitarray
+        # if self.index_length < BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD:
+        #     self._sampled_locations = locations
+        # else:
+        #     self._sampled_locations = locations[sample_step - 1::sample_step]
 
-        sample_length: int = len(self._sampled_locations)
-        tmp_index_key: str = "temp_bitarray_" + str(sample_length)
-        if not hasattr(_thread_local, tmp_index_key):
-            _thread_local.__setattr__(tmp_index_key, bitarray(sample_length))
-        self._temp_sample_intersect_buff: bitarray = _thread_local.__getattribute__(tmp_index_key)
+        # sample_length: int = len(self._sampled_locations)
+        # tmp_index_key: str = "temp_bitarray_" + str(sample_length)
+        # if not hasattr(_thread_local, tmp_index_key):
+        #     _thread_local.__setattr__(tmp_index_key, bitarray(sample_length))
+        # self._temp_sample_intersect_buff: bitarray = _thread_local.__getattribute__(tmp_index_key)
 
     @property
     def count(self) -> int:
@@ -39,19 +39,19 @@ class IndexLocations:
             self._count = self._locations.count(1)
         return self._count
 
-    @staticmethod
-    def fast_predict_bool_intersect_count(loc_list: list['IndexLocations']) -> int | None:
-        sampled_intersection: bitarray = loc_list[0]._temp_sample_intersect_buff
-        sampled_intersection[:] = 1
-        for loc in loc_list:
-            sampled_intersection &= loc._sampled_locations
-        sampled_nonzero_count: int = sampled_intersection.count(1)
-        if loc_list[0].index_length < BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD:
-            estimated_total_nonzero_count: int = sampled_nonzero_count
-        else:
-            estimated_total_nonzero_count: int = int(
-                sampled_nonzero_count / BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE)
-        return estimated_total_nonzero_count
+    # @staticmethod
+    # def fast_predict_bool_intersect_count(loc_list: list['IndexLocations']) -> int | None:
+    #     sampled_intersection: bitarray = loc_list[0]._temp_sample_intersect_buff
+    #     sampled_intersection[:] = 1
+    #     for loc in loc_list:
+    #         sampled_intersection &= loc._sampled_locations
+    #     sampled_nonzero_count: int = sampled_intersection.count(1)
+    #     if loc_list[0].index_length < BOOL_FAST_PREDICT_INTERSECT_COUNT_THRESHOLD:
+    #         estimated_total_nonzero_count: int = sampled_nonzero_count
+    #     else:
+    #         estimated_total_nonzero_count: int = int(
+    #             sampled_nonzero_count / BOOL_FAST_PREDICT_INTERSECT_COUNT_SAMPLE_RATE)
+    #     return estimated_total_nonzero_count
 
     def __and__(self, other: 'IndexLocations') -> 'IndexLocations':
         new_bit_idx: bitarray = self._locations & other._locations
@@ -260,6 +260,6 @@ class Index:
             else:
                 return self._cut_point_index[column].cut_point_locations[cut_point_id].lt_locations
 
-    @staticmethod
-    def fast_predict_bool_intersect_count(loc_list: list['IndexLocations']) -> int | None:
-        return IndexLocations.fast_predict_bool_intersect_count(loc_list)
+    # @staticmethod
+    # def fast_predict_bool_intersect_count(loc_list: list['IndexLocations']) -> int | None:
+    #     return IndexLocations.fast_predict_bool_intersect_count(loc_list)

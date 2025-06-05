@@ -81,6 +81,16 @@ class MCTSTree:
         print("MCTS ended, rounds: %d, cost: %.2f seconds" % (i, time.time() - start_time))
 
     def next_result(self) -> ResultPath | None:
+        while True:
+            selected_node: MCTSTreeNode | None = self._get_best_node()
+            if selected_node is None:
+                return None
+            selected_node.pick()
+            if selected_node.target_rate >= self.min_target_rate:
+                selected_result: ResultPath = selected_node.to_result()
+                return selected_result
+
+    def _get_best_node(self) -> MCTSTreeNode | None:
         cur: MCTSTreeNode = self._root
         while cur.children is not None and len(cur.children) > 0:
             max_weight_child: MCTSTreeNode | None = None
@@ -93,8 +103,5 @@ class MCTSTree:
                 cur = max_weight_child
         if cur.is_root:
             return None
-        selected_node: MCTSTreeNode = cur
-        selected_node.pick()
-        selected_result: ResultPath = selected_node.to_result()
-        return selected_result
+        return cur
 

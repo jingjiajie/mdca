@@ -158,6 +158,9 @@ class MCTSTreeNode:
 
         candidate_columns: list[str]
 
+        if self.path().startswith('[DEROG=mock19, REASON=mock19]'):
+            pass
+
         if self.is_root:
             all_columns: list[str] = index.get_columns_after(None)
             categorical_columns: list[str] = []
@@ -391,8 +394,6 @@ class MCTSTreeNode:
         if child.count == 0 or child.count < self.tree.min_count:
             return False
         elif self.tree.target_column is not None and child.target_count < self.tree.min_target_count:
-            return False
-        elif self.tree.min_target_rate > 0 and child.target_rate < self.tree.min_target_rate:
             return False
 
         is_derived_child: bool = child.derived_from is not None
